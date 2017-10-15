@@ -9,19 +9,10 @@ import cv2
 IMG_RESOLUTION = 1024
 
 
-def create_mask(img):
-    mask = np.zeros(img.shape[:2], np.uint8)
-    pass
-
-
-def prepare_image_pass1(img_file, out_dir):
+def downsample_image(img_file, out_name):
     img = cv2.imread(img_file)
     img_small = resize_to_resolution(img, IMG_RESOLUTION)
-    out_file = os.path.split(img_file)[1]
-    out_file = os.path.splitext(out_file)[0] + '.png'
-    out_file = os.path.join(out_dir, out_file)
-
-    cv2.imwrite(out_file, img_small)
+    cv2.imwrite(out_name, img_small)
     return img_file
 
 
@@ -103,6 +94,13 @@ def prepare_image_pass3(img_file, out_dir):
         return img_file, False
 
 
+def get_downsampled_img_name(img_file, image_dir):
+    img_file = os.path.split(img_file)[1]
+    img_file = os.path.splitext(img_file)[0] + '.png'
+    dir = get_downsampled_dir(image_dir)
+    return os.path.join(dir, img_file)
+
+
 def get_mask_file_name_for_image(img_file):
     img_dir, img_file = os.path.split(img_file)
     mask_dir = os.path.join(img_dir, "masks")
@@ -118,27 +116,46 @@ def get_n_pass_image_file_name(img_file, out_dir, n):
     return pass_n_name
 
 
+def get_raw_dir(image_dir):
+    return os.path.join(image_dir, "raw")
+
+
+def get_downsampled_dir(image_dir):
+    return os.path.join(image_dir, "downsampled")
+
+
+def downsample_images(pool, image_dir, image_files):
+
+    downsampled_dir = get_downsampled_dir(image_dir)
+    if not os.path.exists(downsampled_dir):
+        print "creating dir: %s" % downsampled_dir
+        os.mkdir(downsampled_dir)
+
+    futures = []
+
+    for img_file in image_files:
+        downsampled_file = get_downsampled_img_name(img_file, image_dir)
+        if not os.path.exists(downsampled_file):
+            futures.append(pool.apply_async(downsample_image, (img_file, downsampled_file)))
+
+    for future in futures:
+        name = future.get()
+        print "downsampled: %s" % name
+
+
 def prepare(args):
-    image_files = get_image_names_from_dir(args.image_dir)
+
+    image_files = get_image_names_from_dir(get_raw_dir(args.image_dir))
 
     print "%d images found" % len(image_files)
+
+    pool = Pool()
+    downsample_images(pool, args.image_dir, image_files)
 
     out_dir = os.path.join(args.image_dir, "out")
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
-    pool = Pool()
-    futures = []
-
-    # # starting pass1
-    # for img_file in image_files:
-    #     if not os.path.exists(get_mask_file_name_for_image(img_file)):
-    #         futures.append(pool.apply_async(prepare_image_pass1, (img_file, out_dir)))
-    #
-    # for future in futures:
-    #     # try:
-    #     name = future.get()
-    #     print "pass1: %s" % name
     #
     # # starting pass2
     # futures = []
