@@ -6,6 +6,10 @@ from multiprocessing import Pool
 import numpy as np
 import cv2
 
+from FilesAndDirs import get_n_pass_image_file_name, get_mask_file_name_for_image, get_image_names_from_dir, \
+    get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_default_mask_file_name, get_raw_dir
+from ImageUtils import resize_to_resolution
+
 IMG_RESOLUTION = 1024
 
 
@@ -94,39 +98,31 @@ def prepare_image_pass3(img_file, out_dir):
         return img_file, False
 
 
-def get_downsampled_img_name(img_file, image_dir):
-    img_file = os.path.split(img_file)[1]
-    img_file = os.path.splitext(img_file)[0] + '.png'
-    dir = get_downsampled_dir(image_dir)
-    return os.path.join(dir, img_file)
+def create_default_mask(img_file, mask_dst_file):
+    rgb = cv2.imread(get_downsampled_img_name(img_file))
+    hls = cv2.cvtColor(rgb, cv2.COLOR_BGR2HLS)
+    h = cv2.split(hls)[0]
+    k = 2.0 * 3.14159 / 180
+    float_h = h.astype(np.float32) * k
+    cos_h = np.cos(float_h)
+    sin_h = np.sin(float_h)
+    cos_sin_h = cv2.merge([cos_h, sin_h])
+
+    color_key = np.array([[163, 73, 164]], dtype=np.uint8)
+    color_key_hls = cv2.cvtColor(color_key, cv2.COLOR_BGR2HLS)
+    hue_key = cv2.split(color_key_hls)[0].astype(np.float32) * k
+    key_cos_h = np.cos(hue_key)
+    key_sin_h = np.sin(hue_key)
+    key_cos_sin = cv2.merqe([key_cos_h, key_sin_h])
+
+    diff = cos_sin_h - key_cos_sin
+
+    pass
 
 
-def get_mask_file_name_for_image(img_file):
-    img_dir, img_file = os.path.split(img_file)
-    mask_dir = os.path.join(img_dir, "masks")
-    mask_file_name = os.path.splitext(img_file)[0] + '.png'
-    mask_file_path = os.path.join(mask_dir, mask_file_name)
-    return mask_file_path
+def downsample_images(pool, data_dir, image_files):
 
-
-def get_n_pass_image_file_name(img_file, out_dir, n):
-    img_file = os.path.split(img_file)[1]
-    img_file = os.path.splitext(img_file)[0]
-    pass_n_name = os.path.join(out_dir, "%s_pass%d.png" % (img_file, n))
-    return pass_n_name
-
-
-def get_raw_dir(image_dir):
-    return os.path.join(image_dir, "raw")
-
-
-def get_downsampled_dir(image_dir):
-    return os.path.join(image_dir, "downsampled")
-
-
-def downsample_images(pool, image_dir, image_files):
-
-    downsampled_dir = get_downsampled_dir(image_dir)
+    downsampled_dir = get_downsampled_dir(data_dir)
     if not os.path.exists(downsampled_dir):
         print "creating dir: %s" % downsampled_dir
         os.mkdir(downsampled_dir)
@@ -134,7 +130,7 @@ def downsample_images(pool, image_dir, image_files):
     futures = []
 
     for img_file in image_files:
-        downsampled_file = get_downsampled_img_name(img_file, image_dir)
+        downsampled_file = get_downsampled_img_name(img_file)
         if not os.path.exists(downsampled_file):
             futures.append(pool.apply_async(downsample_image, (img_file, downsampled_file)))
 
@@ -143,16 +139,50 @@ def downsample_images(pool, image_dir, image_files):
         print "downsampled: %s" % name
 
 
+def generate_default_masks(pool, data_dir, image_files):
+
+    masks_dir = get_masks_dir(data_dir)
+    if not os.path.exists(masks_dir):
+        print "creating dir: %s" % masks_dir
+        os.mkdir(masks_dir)
+
+    futures = []
+
+    for img_file in image_files:
+        mask_file = get_default_mask_file_name(img_file)
+        if not os.path.exists(mask_file):
+            futures.append(pool.apply_async(create_default_mask, (img_file, mask_file)))
+
+    for future in futures:
+        name = future.get()
+        print "default mask: %s" % name
+
+
+def segment_images(pool, data_dir, image_files):
+    pass
+
+
 def prepare(args):
 
-    image_files = get_image_names_from_dir(get_raw_dir(args.image_dir))
+    image_files = get_image_names_from_dir(get_raw_dir(args.data_dir))
 
     print "%d images found" % len(image_files)
 
     pool = Pool()
-    downsample_images(pool, args.image_dir, image_files)
 
-    out_dir = os.path.join(args.image_dir, "out")
+    print "downsampling..."
+    downsample_images(pool, args.data_dir, image_files)
+    print "downsampling done"
+
+    print "generating default masks..."
+    generate_default_masks(pool, args.data_dir, image_files)
+    print "done"
+
+    print "segmenting images..."
+    segment_images(pool, args.data_dir, image_files)
+    print "segmenting done"
+
+    out_dir = os.path.join(args.data_dir, "out")
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
@@ -180,31 +210,10 @@ def prepare(args):
         print "pass3: %s - %s" % (name, "ok" if success else "fail")
 
 
-def get_image_names_from_dir(image_dir):
-    _files = os.listdir(image_dir)
-    image_files = []
-    for f in _files:
-        if f.lower().endswith('.jpg'):
-            image_files.append(os.path.join(image_dir, f))
-    return image_files
-
-
-def resize_to_resolution(im, downsample_size):
-    if max(im.shape[0], im.shape[1]) > downsample_size:
-        # downsampling
-        if im.shape[0] > im.shape[1]:
-            dsize = ((downsample_size * im.shape[1]) / im.shape[0], downsample_size)
-        else:
-            dsize = (downsample_size, (downsample_size * im.shape[0]) / im.shape[1])
-        im = cv2.resize(im, dsize, interpolation=cv2.INTER_AREA)
-
-    return im
-
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Prepare dataset')
-    parser.add_argument("image_dir", type=str, help="raw image dir")
+    parser.add_argument("data_dir", type=str, help="raw image dir")
 
     _args = parser.parse_args()
     prepare(_args)
