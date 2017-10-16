@@ -108,16 +108,26 @@ def create_default_mask(img_file, mask_dst_file):
     sin_h = np.sin(float_h)
     cos_sin_h = cv2.merge([cos_h, sin_h])
 
-    color_key = np.array([[163, 73, 164]], dtype=np.uint8)
+    color_key = np.array([[163, 73, 164]], dtype=np.uint8).reshape((1,1,3))
     color_key_hls = cv2.cvtColor(color_key, cv2.COLOR_BGR2HLS)
     hue_key = cv2.split(color_key_hls)[0].astype(np.float32) * k
     key_cos_h = np.cos(hue_key)
     key_sin_h = np.sin(hue_key)
-    key_cos_sin = cv2.merqe([key_cos_h, key_sin_h])
+    key_cos_sin = cv2.merge([key_cos_h, key_sin_h])
 
-    diff = cos_sin_h - key_cos_sin
+    diff = np.linalg.norm(cos_sin_h - key_cos_sin, axis=1)
 
-    pass
+
+    MAX_BG_DIFF = 15
+    MIN_FG_DIFF = 50
+
+    bg_mask = diff < MAX_BG_DIFF
+    fg_mask = diff > MIN_FG_DIFF
+
+    rgb[bg_mask] = np.array([0,0,0], dtype=np.uint8)
+    rgb[fg_mask] = np.array([255,255,255], dtype=np.uint8)
+
+    cv2.imwrite(mask_dst_file, rgb)
 
 
 def downsample_images(pool, data_dir, image_files):
@@ -168,7 +178,7 @@ def prepare(args):
 
     print "%d images found" % len(image_files)
 
-    pool = Pool()
+    pool = Pool(1)
 
     print "downsampling..."
     downsample_images(pool, args.data_dir, image_files)
@@ -181,33 +191,6 @@ def prepare(args):
     print "segmenting images..."
     segment_images(pool, args.data_dir, image_files)
     print "segmenting done"
-
-    out_dir = os.path.join(args.data_dir, "out")
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
-
-    #
-    # # starting pass2
-    # futures = []
-    #
-    # for img_file in image_files:
-    #     if os.path.exists(get_mask_file_name_for_image(img_file)):
-    #         futures.append(pool.apply_async(prepare_image_pass2, (img_file, out_dir)))
-    #
-    # for future in futures:
-    #     name, success = future.get()
-    #     print "pass2: %s - %s" % (name, "ok" if success else "fail")
-
-    # starting pass3
-    futures = []
-
-    for img_file in image_files:
-        if os.path.exists(get_n_pass_image_file_name(img_file, out_dir, 2)):
-            futures.append(pool.apply_async(prepare_image_pass3, (img_file, out_dir)))
-
-    for future in futures:
-        name, success = future.get()
-        print "pass3: %s - %s" % (name, "ok" if success else "fail")
 
 
 if __name__ == "__main__":
