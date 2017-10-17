@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 
 from FilesAndDirs import get_n_pass_image_file_name, get_mask_file_name_for_image, get_image_names_from_dir, \
-    get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_default_mask_file_name, get_raw_dir
+    get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir
 from ImageUtils import resize_to_resolution
 
 IMG_RESOLUTION = 1024
@@ -101,7 +101,10 @@ def prepare_image_pass3(img_file, out_dir):
 def create_default_mask(img_file, mask_dst_file):
     rgb = cv2.imread(get_downsampled_img_name(img_file))
     hls = cv2.cvtColor(rgb, cv2.COLOR_BGR2HLS)
-    h = cv2.split(hls)[0]
+    hls_split = cv2.split(hls)
+    h = hls_split[0]
+    l = hls_split[1]
+    s = hls_split[2]
     k = 2.0 * 3.14159 / 180
     float_h = h.astype(np.float32) * k
     cos_h = np.cos(float_h)
@@ -115,19 +118,25 @@ def create_default_mask(img_file, mask_dst_file):
     key_sin_h = np.sin(hue_key)
     key_cos_sin = cv2.merge([key_cos_h, key_sin_h])
 
-    diff = np.linalg.norm(cos_sin_h - key_cos_sin, axis=1)
+    diff = np.linalg.norm(cos_sin_h - key_cos_sin, axis=2)
 
+    MAX_BG_DIFF = 0.2
+    MIN_FG_DIFF = 0.8
 
-    MAX_BG_DIFF = 15
-    MIN_FG_DIFF = 50
+    # using hue distances only for valid pixels:
+    # no color or lightness saturations
+    MIN_LIGHTNESS = 50
+    MIN_COLOR_SATURATION = 50
+    valid_pixels = (l > MIN_LIGHTNESS) * (s > MIN_COLOR_SATURATION)
 
-    bg_mask = diff < MAX_BG_DIFF
-    fg_mask = diff > MIN_FG_DIFF
+    bg_mask = (diff < MAX_BG_DIFF) * valid_pixels
+    fg_mask = (diff > MIN_FG_DIFF) * valid_pixels
 
     rgb[bg_mask] = np.array([0,0,0], dtype=np.uint8)
     rgb[fg_mask] = np.array([255,255,255], dtype=np.uint8)
 
     cv2.imwrite(mask_dst_file, rgb)
+    return img_file
 
 
 def downsample_images(pool, data_dir, image_files):
@@ -159,7 +168,7 @@ def generate_default_masks(pool, data_dir, image_files):
     futures = []
 
     for img_file in image_files:
-        mask_file = get_default_mask_file_name(img_file)
+        mask_file = get_mask_file_name(img_file)
         if not os.path.exists(mask_file):
             futures.append(pool.apply_async(create_default_mask, (img_file, mask_file)))
 

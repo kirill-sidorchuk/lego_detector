@@ -36,7 +36,7 @@ def get_png_name_for_jpeg(img_file):
     return img_file + '.png'
 
 
-def get_default_mask_file_name(img_file):
+def get_mask_file_name(img_file):
     data_dir = get_data_dir(img_file)
     masks_dir = get_masks_dir(data_dir)
     png_name = get_png_name_for_jpeg(img_file)
