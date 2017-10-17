@@ -8,7 +8,7 @@ import cv2
 
 from FilesAndDirs import get_n_pass_image_file_name, get_mask_file_name_for_image, get_image_names_from_dir, \
     get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir
-from ImageUtils import resize_to_resolution
+from ImageUtils import resize_to_resolution, shrink_mask, expand_mask
 
 IMG_RESOLUTION = 1024
 
@@ -98,39 +98,75 @@ def prepare_image_pass3(img_file, out_dir):
         return img_file, False
 
 
-def create_default_mask(img_file, mask_dst_file):
-    rgb = cv2.imread(get_downsampled_img_name(img_file))
-    hls = cv2.cvtColor(rgb, cv2.COLOR_BGR2HLS)
+def calc_color_key_features(rgb):
+    hls = cv2.cvtColor(rgb.astype(np.float32)/255.0, cv2.COLOR_BGR2HLS)
     hls_split = cv2.split(hls)
     h = hls_split[0]
     l = hls_split[1]
     s = hls_split[2]
-    k = 2.0 * 3.14159 / 180
+    k = 3.14159 / 180
     float_h = h.astype(np.float32) * k
     cos_h = np.cos(float_h)
     sin_h = np.sin(float_h)
-    cos_sin_h = cv2.merge([cos_h, sin_h])
+    features_img = cv2.merge([cos_h, sin_h, (l * 0.2/255).astype(np.float32), (s * 0.8/255).astype(np.float32)])
+    return features_img, hls_split
 
-    color_key = np.array([[163, 73, 164]], dtype=np.uint8).reshape((1,1,3))
-    color_key_hls = cv2.cvtColor(color_key, cv2.COLOR_BGR2HLS)
-    hue_key = cv2.split(color_key_hls)[0].astype(np.float32) * k
-    key_cos_h = np.cos(hue_key)
-    key_sin_h = np.sin(hue_key)
-    key_cos_sin = cv2.merge([key_cos_h, key_sin_h])
 
-    diff = np.linalg.norm(cos_sin_h - key_cos_sin, axis=2)
+def calc_color_key_features_lab(rgb):
+    return calc_color_key_features(rgb)
+    # lab = cv2.cvtColor(rgb, cv2.COLOR_BGR2LAB).astype(np.float32)
+    # lab_split = cv2.split(lab)
+    # l = lab_split[0]
+    # a = lab_split[1]
+    # b = lab_split[2]
+    # features_img = cv2.merge(np.array([l*0.01, a, b], dtype=np.float32))
+    # return features_img, lab_split
+
+
+def create_default_mask(img_file, mask_dst_file):
+    rgb = cv2.imread(get_downsampled_img_name(img_file))
+
+    img_features, img_hls = calc_color_key_features(rgb)
+
+    color_key1 = np.array([[163, 73, 164]], dtype=np.uint8).reshape((1,1,3))
+    key_features1, _ = calc_color_key_features(color_key1)
+
+    color_key2 = np.array([[200, 170, 200]], dtype=np.uint8).reshape((1,1,3))
+    key_features2, _ = calc_color_key_features(color_key2)
+
+    color_key3 = np.array([[140, 80, 140]], dtype=np.uint8).reshape((1,1,3))
+    key_features3, _ = calc_color_key_features(color_key3)
+
+    diff1 = np.linalg.norm(img_features - key_features1, axis=2)
+    diff2 = np.linalg.norm(img_features - key_features2, axis=2)
+    diff3 = np.linalg.norm(img_features - key_features3, axis=2)
+    diff = np.minimum(np.minimum(diff1, diff2), diff3)
+
+    diff_file = os.path.splitext(mask_dst_file)[0] + '_diff.png'
+    k = 250.0 / np.max(diff)
+    diff8 = (diff * k).astype(np.uint8)
+    cv2.imwrite(diff_file, diff8)
 
     MAX_BG_DIFF = 0.2
     MIN_FG_DIFF = 0.8
 
     # using hue distances only for valid pixels:
     # no color or lightness saturations
-    MIN_LIGHTNESS = 50
-    MIN_COLOR_SATURATION = 50
+    MIN_LIGHTNESS = 0.3
+    MIN_COLOR_SATURATION = 0.1
+    l = img_hls[1]  # lightness
+    s = img_hls[2]  # saturation
     valid_pixels = (l > MIN_LIGHTNESS) * (s > MIN_COLOR_SATURATION)
+
+    valid_file = os.path.splitext(mask_dst_file)[0] + '_valid.png'
+    cv2.imwrite(valid_file, valid_pixels.astype(np.uint8) * 255)
 
     bg_mask = (diff < MAX_BG_DIFF) * valid_pixels
     fg_mask = (diff > MIN_FG_DIFF) * valid_pixels
+    # unknown_mask = ~(bg_mask + fg_mask)
+    # unknown_mask = expand_mask(unknown_mask.astype(np.uint8), 1)
+    # bg_mask = bg_mask * (~unknown_mask)
+    # fb_mask = fg_mask * (~unknown_mask)
 
     rgb[bg_mask] = np.array([0,0,0], dtype=np.uint8)
     rgb[fg_mask] = np.array([255,255,255], dtype=np.uint8)
@@ -187,7 +223,7 @@ def prepare(args):
 
     print "%d images found" % len(image_files)
 
-    pool = Pool(1)
+    pool = Pool(2)
 
     print "downsampling..."
     downsample_images(pool, args.data_dir, image_files)

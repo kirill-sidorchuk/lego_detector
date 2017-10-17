@@ -1,5 +1,5 @@
 import cv2
-
+import numpy as np
 
 def resize_to_resolution(im, downsample_size):
     if max(im.shape[0], im.shape[1]) > downsample_size:
@@ -12,3 +12,12 @@ def resize_to_resolution(im, downsample_size):
 
     return im
 
+
+def expand_mask(mask, kernel_size, n_iter=1):
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    return cv2.dilate(mask, kernel, iterations=n_iter)
+
+
+def shrink_mask(mask, kernel_size, n_iter=1):
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    return cv2.erode(mask, kernel, iterations=n_iter)
