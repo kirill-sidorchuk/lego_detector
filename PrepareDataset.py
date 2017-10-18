@@ -215,7 +215,7 @@ def downsample_images(pool, data_dir, image_files):
 
     for future in futures:
         name = future.get()
-        print "downsampled: %s" % name
+        print("downsampled: %s" % name)
 
 
 def generate_default_masks(pool, data_dir, image_files):
@@ -232,7 +232,7 @@ def generate_default_masks(pool, data_dir, image_files):
 
     for future in futures:
         name = future.get()
-        print "default mask: %s" % name
+        print("default mask: %s" % name)
 
 
 def segment_images(pool, data_dir, image_files):
@@ -249,7 +249,7 @@ def segment_images(pool, data_dir, image_files):
 
     for future in futures:
         name, success = future.get()
-        print "segmented: %s" % name if success else "failed to segment: %s" % name
+        print("segmented: %s" % name if success else "failed to segment: %s" % name)
 
 
 def split_parts(pool, data_dir, image_files):
@@ -265,32 +265,32 @@ def split_parts(pool, data_dir, image_files):
 
     for future in futures:
         name, success = future.get()
-        print "parts split: %s" % name if success else "failed to split parts: %s" % name
+        print("parts split: %s" % name if success else "failed to split parts: %s" % name)
 
 
 def prepare(args):
 
     image_files = get_image_names_from_dir(get_raw_dir(args.data_dir))
 
-    print "%d images found" % len(image_files)
+    print("%d images found" % len(image_files))
 
     pool = Pool(4)
 
-    print "downsampling..."
+    print("downsampling...")
     downsample_images(pool, args.data_dir, image_files)
-    print "downsampling done"
+    print("downsampling done")
 
-    print "generating default masks..."
+    print("generating default masks...")
     generate_default_masks(pool, args.data_dir, image_files)
-    print "done"
+    print("done")
 
-    print "segmenting images..."
+    print("segmenting images...")
     segment_images(pool, args.data_dir, image_files)
-    print "segmenting done"
+    print("segmenting done")
 
-    print "splitting parts..."
+    print("splitting parts...")
     split_parts(pool, args.data_dir, image_files)
-    print "splitting parts done"
+    print("splitting parts done")
 
 
 if __name__ == "__main__":
