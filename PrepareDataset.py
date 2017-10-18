@@ -102,7 +102,7 @@ def split_parts_for_image(img_file, out_dir):
                     found = True
 
                 # clearing found component in the mask
-                roi[roi_mask != 0] = 0
+                mask[y:y + h, x:x + w][roi_mask != 0] = 0
 
                 if found:
                     break
@@ -113,7 +113,8 @@ def split_parts_for_image(img_file, out_dir):
 
             if found_mask is not None:
                 # we found some part
-                part_file = os.path.join(out_dir, "part_%02d.png" % part_index)
+                title = os.path.splitext(os.path.split(img_file)[1])[0]
+                part_file = os.path.join(out_dir, "%s_%02d.png" % (title, part_index))
                 cv2.imwrite(part_file, found_image)
                 part_index += 1
                 # print "#%d: area = %d, rect = %s" % (part_index, area, str(rect))
@@ -260,8 +261,7 @@ def split_parts(pool, data_dir, image_files):
 
     for img_file in image_files:
         parts_dir = get_parts_dir_name(img_file)
-        if not os.path.exists(parts_dir):
-            futures.append(pool.apply_async(split_parts_for_image, (img_file, parts_dir)))
+        futures.append(pool.apply_async(split_parts_for_image, (img_file, parts_dir)))
 
     for future in futures:
         name, success = future.get()
@@ -274,7 +274,7 @@ def prepare(args):
 
     print "%d images found" % len(image_files)
 
-    pool = Pool(1)
+    pool = Pool(4)
 
     print "downsampling..."
     downsample_images(pool, args.data_dir, image_files)
