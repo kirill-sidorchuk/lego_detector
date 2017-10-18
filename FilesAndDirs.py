@@ -1,6 +1,12 @@
 import os
 
 
+def clear_directory(dir_name):
+    files = os.listdir(dir_name)
+    for file_name in files:
+        os.remove(os.path.join(dir_name, file_name))
+
+
 def get_image_names_from_dir(data_dir):
     _files = os.listdir(data_dir)
     image_files = []
@@ -13,14 +19,6 @@ def get_image_names_from_dir(data_dir):
 def get_downsampled_img_name(img_file):
     ds_dir = get_downsampled_dir(get_data_dir(img_file))
     return os.path.join(ds_dir, get_png_name_for_jpeg(img_file))
-
-
-def get_mask_file_name_for_image(img_file):
-    img_dir, img_file = os.path.split(img_file)
-    mask_dir = os.path.join(img_dir, "masks")
-    mask_file_name = os.path.splitext(img_file)[0] + '.png'
-    mask_file_path = os.path.join(mask_dir, mask_file_name)
-    return mask_file_path
 
 
 def get_n_pass_image_file_name(img_file, out_dir, n):
@@ -43,6 +41,32 @@ def get_mask_file_name(img_file):
     return os.path.join(masks_dir, png_name)
 
 
+def get_seg_file_name(img_file):
+    data_dir = get_data_dir(img_file)
+    seg_dir = get_segmentation_dir(data_dir)
+    png_name = get_png_name_for_jpeg(img_file)
+    return os.path.join(seg_dir, png_name)
+
+
+def get_parts_dir_name(img_file):
+    data_dir = get_data_dir(img_file)
+    parts_dir = get_parts_dir(data_dir)
+    dir_name = os.path.splitext(os.path.split(img_file)[1])[0]
+    return os.path.join(parts_dir, dir_name)
+
+
+def create_dir(dir):
+    if not os.path.exists(dir):
+        print "creating dir: %s" % dir
+        os.mkdir(dir)
+        if not os.path.exists(dir):
+            raise Exception("Failed to create dir: %s" % dir)
+
+
+def get_data_dir(img_file):
+    return os.path.split(os.path.split(img_file)[0])[0]
+
+
 def get_raw_dir(data_dir):
     return os.path.join(data_dir, "raw")
 
@@ -55,5 +79,9 @@ def get_masks_dir(data_dir):
     return os.path.join(data_dir, "masks")
 
 
-def get_data_dir(img_file):
-    return os.path.split(os.path.split(img_file)[0])[0]
+def get_segmentation_dir(data_dir):
+    return os.path.join(data_dir, "segmentation")
+
+
+def get_parts_dir(data_dir):
+    return os.path.join(data_dir, "parts")

@@ -6,8 +6,9 @@ from multiprocessing import Pool
 import numpy as np
 import cv2
 
-from FilesAndDirs import get_n_pass_image_file_name, get_mask_file_name_for_image, get_image_names_from_dir, \
-    get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir
+from FilesAndDirs import get_n_pass_image_file_name, get_image_names_from_dir, \
+    get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir, get_segmentation_dir, \
+    create_dir, get_seg_file_name, get_parts_dir, get_parts_dir_name, clear_directory
 from ImageUtils import resize_to_resolution, shrink_mask, expand_mask
 
 IMG_RESOLUTION = 1024
@@ -20,50 +21,53 @@ def downsample_image(img_file, out_name):
     return img_file
 
 
-def prepare_image_pass2(img_file, out_dir):
+def create_segmentation(img_file, seg_file):
     try:
-        img = cv2.imread(img_file)
-        img_small = resize_to_resolution(img, IMG_RESOLUTION)
+        img = cv2.imread(get_downsampled_img_name(img_file))
 
-        # composing mask name
-        mask_file_path = get_mask_file_name_for_image(img_file)
-        mask_img = cv2.imread(mask_file_path)
+        # loading mask
+        mask_img = cv2.imread(get_mask_file_name(img_file))
+
         # converting to grayscale
         mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
 
-        mask = np.ones(img_small.shape[:2], np.uint8) * cv2.GC_PR_BGD
+        mask = np.ones(img.shape[:2], np.uint8) * cv2.GC_PR_BGD
         mask[mask_img == 0] = cv2.GC_BGD
         mask[mask_img == 255] = cv2.GC_FGD
 
         bgdModel = np.zeros((1, 65), np.float64)
         fgdModel = np.zeros((1, 65), np.float64)
-        cv2.grabCut(img_small, mask, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
+        cv2.grabCut(img, mask, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
 
         mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
-        segmented = img_small * mask2[:, :, np.newaxis]
+        segmented = img * mask2[:, :, np.newaxis]
 
-        out_file = os.path.split(img_file)[1]
-        out_file = os.path.splitext(out_file)[0] + '_pass2.png'
-        out_file = os.path.join(out_dir, out_file)
-        cv2.imwrite(out_file, segmented)
+        # saving segmentation
+        cv2.imwrite(seg_file, segmented)
         return img_file, True
 
     except Exception as _:
         return img_file, False
 
 
-def prepare_image_pass3(img_file, out_dir):
+def split_parts_for_image(img_file, out_dir):
     try:
-        pass_2_image_name = get_n_pass_image_file_name(img_file, out_dir, 2)
 
-        segmented_img = cv2.imread(pass_2_image_name)
+        if os.path.exists(out_dir):
+            clear_directory(out_dir)
+        else:
+            create_dir(out_dir)
+
+        segmented_img = cv2.imread(get_seg_file_name(img_file))
         width = segmented_img.shape[1]
         height = segmented_img.shape[0]
 
         min_area = 10
         max_area = width * height / 2
 
-        mask = (segmented_img != 0).astype(np.uint8)
+        mask = cv2.cvtColor((segmented_img != 0).astype(np.uint8), cv2.COLOR_BGR2GRAY)
+
+        part_index = 0
 
         while True:
             nz = np.nonzero(mask.flatten())[0].flatten()
@@ -72,7 +76,7 @@ def prepare_image_pass3(img_file, out_dir):
 
             nz_i = 0
             found_mask = None
-            found_rect = None
+            found_image = None
             while True:
                 index = nz[nz_i]
                 seed_x = index % width
@@ -81,17 +85,38 @@ def prepare_image_pass3(img_file, out_dir):
                 ff_mask = np.zeros((height+2, width+2), dtype=np.uint8)
                 area, rect = cv2.floodFill(mask, ff_mask, (seed_x, seed_y), 255, flags=cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE)
 
+                x = rect[0]
+                y = rect[1]
+                w = rect[2]
+                h = rect[3]
+
+                # slicing into found rect
+                roi = mask[y:y+h, x:x+w]
+                roi_mask = ff_mask[y+1:y+1+h, x+1:x+1+w]
+
+                found = False
                 if min_area < area < max_area:
                     found_mask = ff_mask
-                    found_rect = rect
+                    found_image = segmented_img[y:y+h, x:x+w][:]
+                    found_image[roi_mask == 0] = 0
+                    found = True
+
+                # clearing found component in the mask
+                roi[roi_mask != 0] = 0
+
+                if found:
                     break
 
                 nz_i += 1
+                if nz_i >= len(nz):
+                    break
 
-            print "area = %d, rect = %s" % (area, str(rect))
-
-            pass
-
+            if found_mask is not None:
+                # we found some part
+                part_file = os.path.join(out_dir, "part_%02d.png" % part_index)
+                cv2.imwrite(part_file, found_image)
+                part_index += 1
+                # print "#%d: area = %d, rect = %s" % (part_index, area, str(rect))
 
         return img_file, True
     except Exception as _:
@@ -178,9 +203,7 @@ def create_default_mask(img_file, mask_dst_file):
 def downsample_images(pool, data_dir, image_files):
 
     downsampled_dir = get_downsampled_dir(data_dir)
-    if not os.path.exists(downsampled_dir):
-        print "creating dir: %s" % downsampled_dir
-        os.mkdir(downsampled_dir)
+    create_dir(downsampled_dir)
 
     futures = []
 
@@ -197,9 +220,7 @@ def downsample_images(pool, data_dir, image_files):
 def generate_default_masks(pool, data_dir, image_files):
 
     masks_dir = get_masks_dir(data_dir)
-    if not os.path.exists(masks_dir):
-        print "creating dir: %s" % masks_dir
-        os.mkdir(masks_dir)
+    create_dir(masks_dir)
 
     futures = []
 
@@ -214,7 +235,37 @@ def generate_default_masks(pool, data_dir, image_files):
 
 
 def segment_images(pool, data_dir, image_files):
-    pass
+
+    seg_dir = get_segmentation_dir(data_dir)
+    create_dir(seg_dir)
+
+    futures = []
+
+    for img_file in image_files:
+        seg_file = get_seg_file_name(img_file)
+        if not os.path.exists(seg_file):
+            futures.append(pool.apply_async(create_segmentation, (img_file, seg_file)))
+
+    for future in futures:
+        name, success = future.get()
+        print "segmented: %s" % name if success else "failed to segment: %s" % name
+
+
+def split_parts(pool, data_dir, image_files):
+
+    parts_dir = get_parts_dir(data_dir)
+    create_dir(parts_dir)
+
+    futures = []
+
+    for img_file in image_files:
+        parts_dir = get_parts_dir_name(img_file)
+        if not os.path.exists(parts_dir):
+            futures.append(pool.apply_async(split_parts_for_image, (img_file, parts_dir)))
+
+    for future in futures:
+        name, success = future.get()
+        print "parts split: %s" % name if success else "failed to split parts: %s" % name
 
 
 def prepare(args):
@@ -223,7 +274,7 @@ def prepare(args):
 
     print "%d images found" % len(image_files)
 
-    pool = Pool(2)
+    pool = Pool(1)
 
     print "downsampling..."
     downsample_images(pool, args.data_dir, image_files)
@@ -236,6 +287,10 @@ def prepare(args):
     print "segmenting images..."
     segment_images(pool, args.data_dir, image_files)
     print "segmenting done"
+
+    print "splitting parts..."
+    split_parts(pool, args.data_dir, image_files)
+    print "splitting parts done"
 
 
 if __name__ == "__main__":
