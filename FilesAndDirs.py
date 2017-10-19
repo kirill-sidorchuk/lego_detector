@@ -55,12 +55,12 @@ def get_parts_dir_name(img_file):
     return os.path.join(parts_dir, dir_name)
 
 
-def create_dir(dir):
-    if not os.path.exists(dir):
-        print "creating dir: %s" % dir
-        os.mkdir(dir)
-        if not os.path.exists(dir):
-            raise Exception("Failed to create dir: %s" % dir)
+def create_dir(d):
+    if not os.path.exists(d):
+        print("creating dir: %s" % d)
+        os.mkdir(d)
+        if not os.path.exists(d):
+            raise Exception("Failed to create dir: %s" % d)
 
 
 def get_data_dir(img_file):
