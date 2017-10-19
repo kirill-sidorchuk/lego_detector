@@ -15,4 +15,5 @@ nb_validation_samples = 466
 batch_size = 16
 epochs = 50
 
-model = applications.ResNet50(weights = "imagenet", include_top=False, input_shape = (img_width, img_height, 3))
+model = applications.ResNet50(weights="imagenet", include_top=False, input_shape=(img_width, img_height, 3))
+model.summary()
