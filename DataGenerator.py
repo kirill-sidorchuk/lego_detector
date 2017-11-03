@@ -90,6 +90,9 @@ class DataGenerator(object):
         dst[fg_mask] = fg_image
         return dst
 
+    def get_num_classes(self):
+        return self.num_classes
+
     def transform_image(self, img, dst_size, mask=None):
 
         # random rotation
