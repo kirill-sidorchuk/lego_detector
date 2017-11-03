@@ -3,6 +3,7 @@ import numpy as np
 import os
 from keras import applications
 from keras import optimizers
+from keras.engine import Model
 from keras.layers import Dropout, Flatten, Dense, BatchNormalization, Activation
 from keras import backend as k
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, CSVLogger
@@ -29,7 +30,7 @@ def parse_epoch(snapshot):
 
 def create_model(num_classes):
     model = applications.ResNet50(weights="imagenet", include_top=False, input_shape=(IMAGE_WIDTH, IMAGE_HEIGHT, 3))
-    model.summary()
+    # model.summary()
 
     # freezing all layers
     for layer in model.layers:
@@ -43,7 +44,7 @@ def create_model(num_classes):
     x = Activation('relu')(x)
 
     predictions = Dense(num_classes, activation='softmax')(x)
-    return predictions
+    return Model(model.input, predictions)
 
 
 def finetune(args):
@@ -95,24 +96,10 @@ def finetune(args):
 
     callbacks_list = [checkpoint, csv_logger, tb_log]
 
-    # def scheduler(epoch):
-    #     if epoch == 10:
-    #         lr = K.get_value(model.optimizer.lr) * 0.2
-    #         K.set_value(model.optimizer.lr, lr)
-    #         print("lr changed to {}".format(lr))
-    #     if epoch == 40:
-    #         lr = K.get_value(model.optimizer.lr) * 0.8
-    #         K.set_value(model.optimizer.lr, lr)
-    #         print("lr changed to {}".format(lr))
-    #     return K.get_value(model.optimizer.lr)
-    #
-    # change_lr = LearningRateScheduler(scheduler)
-
-    model.fit_generator(generator=train_data_generator, steps_per_epoch=train_data_generator.get_steps_per_epoch(),
+    model.fit_generator(generator=train_data_generator.generate(), steps_per_epoch=train_data_generator.get_steps_per_epoch(),
                         epochs=nb_epoch, callbacks=callbacks_list,
-                        validation_data=val_data_generator, validation_steps=val_data_generator.get_steps_per_epoch(),
+                        validation_data=val_data_generator.generate(), validation_steps=val_data_generator.get_steps_per_epoch(),
                         initial_epoch=start_epoch)
-
 
 
 if __name__ == "__main__":

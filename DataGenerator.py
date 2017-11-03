@@ -6,12 +6,11 @@ from keras.utils import to_categorical
 import ImageUtils
 from FinalizeDataset import SORTED_DIR
 
-BG_RESOLUTION = 2048
+BG_RESOLUTION = 1024
 
 
 class DataGenerator(object):
-
-    def __init__(self, data_root, dataset_type, max_rotation, max_zoom, max_saturation_delta, max_lightness_delta,\
+    def __init__(self, data_root, dataset_type, max_rotation, max_zoom, max_saturation_delta, max_lightness_delta,
                  batch_size, image_size):
         self.data_root = data_root
         self.max_rotation = max_rotation
@@ -68,12 +67,12 @@ class DataGenerator(object):
 
                 # create mask
                 img_bw = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                img_mask = (img_bw == 0).astype(np.uint8)
+                img_mask = (img_bw != 0).astype(np.uint8)
 
-                if _class in self.images:
-                    self.images[_class].append((img, img_mask))
+                if _class in images:
+                    images[_class].append((img, img_mask))
                 else:
-                    self.images[_class] = [(img, img_mask)]
+                    images[_class] = [(img, img_mask)]
 
         return images
 
@@ -87,7 +86,8 @@ class DataGenerator(object):
 
     def render(self, fg_image, fg_mask, bg_image):
         dst = bg_image.copy()
-        dst[fg_mask] = fg_image
+        dst[fg_mask != 0] = 0
+        dst += fg_image
         return dst
 
     def get_num_classes(self):
@@ -96,25 +96,27 @@ class DataGenerator(object):
     def transform_image(self, img, dst_size, mask=None):
 
         # random rotation
-        center = (img.shape[1]/2, img.shape[0]/2)
+        center = (img.shape[1] / 2, img.shape[0] / 2)
         angle = np.random.rand() * self.max_rotation
         scale = np.random.rand() * self.max_zoom
         mat = cv2.getRotationMatrix2D(center, angle, scale)
-        rotated = cv2.wrapAffine(img, mat, dst_size, flags=cv2.INTER_AREA, border_mode=cv2.BORDER_REFLECT_101)
+        border_mode = cv2.BORDER_REFLECT_101 if mask is None else cv2.BORDER_CONSTANT
+        rotated = cv2.warpAffine(img, mat, dst_size, flags=cv2.INTER_AREA, borderMode=border_mode, borderValue=0)
 
         if mask is not None:
-            rotated_mask = cv2.wrapAffine(mask, mat, dst_size, flags=cv2.INTER_AREA, border_mode=cv2.BORDER_REFLECT_101)
+            rotated_mask = cv2.warpAffine(mask, mat, dst_size, flags=cv2.INTER_AREA, borderMode=border_mode, borderValue=0)
         else:
             rotated_mask = None
 
         # random channel dropout
         if np.random.rand() < 0.5:
             bgr = cv2.split(rotated)
-            bgr[np.random.randint(3)] *= np.random.rand()
+            channel = np.random.randint(3)
+            bgr[channel] = (bgr[channel] * np.random.rand()).astype(np.uint8)
             rotated = cv2.merge(bgr)
 
         # random hue shift
-        hsv = cv2.split(cv2.cvtColor(rotated.astype(np.float32)/255., cv2.COLOR_BGR2HSV))
+        hsv = cv2.split(cv2.cvtColor(rotated.astype(np.float32) / 255., cv2.COLOR_BGR2HSV))
         hsv[0] += np.random.rand() * 360
         n = (hsv[0] / 360).astype(np.uint32)
         hsv[0] -= n * 360  # making hue to be within 0..360
@@ -159,7 +161,6 @@ class DataGenerator(object):
                 batch_labels = []
 
                 for b in range(self.batch_size):
-
                     _img_index = img_indexes[img_index]
                     _bg_index = bg_indexes[bg_index]
 
@@ -174,7 +175,7 @@ class DataGenerator(object):
 
                     batch.append(generated_img)
 
-                    bg_index = (bg_index+1) % len(self.bg_images)
+                    bg_index = (bg_index + 1) % len(self.bg_images)
                     img_index += 1
 
                 # converting to numpy arrays
