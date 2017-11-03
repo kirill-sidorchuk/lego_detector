@@ -1,8 +1,12 @@
 import os
 import numpy as np
 import cv2
+from keras.utils import to_categorical
 
+import ImageUtils
 from FinalizeDataset import SORTED_DIR
+
+BG_RESOLUTION = 2048
 
 
 class DataGenerator(object):
@@ -19,7 +23,22 @@ class DataGenerator(object):
 
         self.image_files = self.load_labels(dataset_type + ".txt")
         self.images = self.load_images()
+        self.num_classes = len(self.images)
         self.image_tuples = self.initialize_image_order()
+
+        self.bg_images = self.load_backgrounds()
+
+    def load_backgrounds(self):
+        bg_dir = os.path.join(self.data_root, "backgrounds")
+        bg_files = os.listdir(bg_dir)
+        bg_images = []
+        for bg_file in bg_files:
+            bg_img = cv2.imread(os.path.join(bg_dir, bg_file))
+            if bg_img is None:
+                continue
+            bg_resized = ImageUtils.resize_to_resolution(bg_img, BG_RESOLUTION)
+            bg_images.append(bg_resized)
+        return bg_images
 
     def load_labels(self, labels_file):
         with open(os.path.join(self.data_root, labels_file), "r") as f:
@@ -67,7 +86,9 @@ class DataGenerator(object):
         return image_tuples
 
     def render(self, fg_image, fg_mask, bg_image):
-        bg_image[fg_mask] = fg_image
+        dst = bg_image.copy()
+        dst[fg_mask] = fg_image
+        return dst
 
     def transform_image(self, img, dst_size, mask=None):
 
@@ -120,10 +141,14 @@ class DataGenerator(object):
         # Infinite loop
         while 1:
             # Generate order of exploration of dataset
-            indexes = np.arange(len(self.data))
-            np.random.shuffle(indexes)
+            img_indexes = np.arange(len(self.image_tuples))
+            np.random.shuffle(img_indexes)
+            bg_indexes = np.arange(len(self.bg_images))
+            np.random.shuffle(bg_indexes)
 
             # Generate batches
+            bg_index = 0
+            img_index = 0
             n = self.get_steps_per_epoch()
             for i in range(n):
 
@@ -131,30 +156,25 @@ class DataGenerator(object):
                 batch_labels = []
 
                 for b in range(self.batch_size):
-                    # getting random data file
-                    raw_data = self.data[np.random.randint(len(self.data))]
 
-                    # getting random sequence from the file
-                    seq_i = np.random.randint(len(raw_data) - self.seq_length - 2)
-                    sequence = raw_data[seq_i: seq_i + self.seq_length + 1].copy()  # add extra sample at the end as label
+                    _img_index = img_indexes[img_index]
+                    _bg_index = bg_indexes[bg_index]
 
-                    # normalizing sequence (together with next rate sample)
-                    normalize_sequence(sequence)
+                    img, mask, label = self.image_tuples[_img_index]
+                    bg_img = self.bg_images[_bg_index]
 
-                    # data augmentation
+                    generated_img = self.generate_image(img, mask, bg_img, self.image_size)
 
-                    # additive noise
-                    sequence += np.random.randn(sequence.shape[0], sequence.shape[1]) * AUG_NOISE_SIGMA
+                    # formatting data for the network
+                    batch.append(cv2.split(generated_img))
+                    batch_labels.append(label)
 
-                    # multiplicative noise
-                    sequence[:, TIME_COLUMN] *= 1 + np.random.randn() * MULT_NOISE_FOR_TIME
-                    sequence[:, RATE_COLUMN] *= 1 + np.random.randn() * MULT_NOISE_FOR_RATE
-                    sequence[:, VOLUME_COLUMN] *= 1 + np.random.randn() * MULT_NOISE_FOR_RATE
+                    batch.append(generated_img)
 
-                    next_rate = sequence[-1, RATE_COLUMN]
+                    bg_index = (bg_index+1) % len(self.bg_images)
+                    img_index += 1
 
-                    batch.append(sequence[0:-1])
-                    batch_labels.append(next_rate)
-
-                yield np.array(batch, dtype=np.float32), np.array(batch_labels, dtype=np.float32)
-
+                # converting to numpy arrays
+                batch = np.array(batch, dtype=np.float32)
+                batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
+                yield batch, batch_labels
