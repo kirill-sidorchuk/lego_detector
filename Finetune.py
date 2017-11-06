@@ -30,7 +30,6 @@ def parse_epoch(snapshot):
 
 def create_model(num_classes):
     model = applications.ResNet50(weights="imagenet", include_top=False, input_shape=(IMAGE_WIDTH, IMAGE_HEIGHT, 3))
-    # model.summary()
 
     # freezing all layers
     for layer in model.layers:
@@ -40,6 +39,12 @@ def create_model(num_classes):
     x = Flatten()(x)
 
     x = Dense(512)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Dense(128)(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
 
@@ -74,8 +79,8 @@ def finetune(args):
     # print summary
     model.summary()
 
-    nb_epoch = 100
-    sgd = optimizers.Adam(lr=0.01, decay=1e-4, beta_1=0.9)
+    nb_epoch = 400
+    sgd = optimizers.Adam(lr=0.001, decay=1e-4, beta_1=0.9)
 
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['acc'])
     filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{val_acc:.3f}.hdf5")

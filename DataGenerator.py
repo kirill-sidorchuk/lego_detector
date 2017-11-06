@@ -68,6 +68,8 @@ class DataGenerator(object):
             for img_file in imgs:
                 # load image
                 img = cv2.imread(img_file)
+                if img is None:
+                    raise Exception("cannot read " + img_file)
 
                 # create mask
                 img_bw = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

@@ -15,7 +15,7 @@ def write_labels(data_root, dataset_type, data):
             imgs = data[_class]
             for img in imgs:
                 img_file = os.path.join(_class, img)
-                f.write("%s\n" % img_file)
+                f.write("%s\n" % img_file.replace('\\', '/'))
 
 
 def finalize(args):
