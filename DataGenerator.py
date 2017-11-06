@@ -20,7 +20,7 @@ class DataGenerator(object):
         self.image_size = image_size
         self.batch_size = batch_size
 
-        self.image_files = self.load_labels(dataset_type + ".txt")
+        self.image_files, self.labels_to_ints = self.load_labels(dataset_type + ".txt")
         self.images = self.load_images()
         self.num_classes = len(self.images)
         self.image_tuples = self.initialize_image_order()
@@ -43,6 +43,8 @@ class DataGenerator(object):
         with open(os.path.join(self.data_root, labels_file), "r") as f:
             lines = f.readlines()
 
+        labels_to_ints = {}
+        label_index = 0
         images = {}
         for line in lines:
             path = line.strip()
@@ -54,8 +56,10 @@ class DataGenerator(object):
                 images[label].append(img_file)
             else:
                 images[label] = [img_file]
+                labels_to_ints[label] = label_index
+                label_index += 1
 
-        return images
+        return images, labels_to_ints
 
     def load_images(self):
         images = {}
@@ -170,15 +174,13 @@ class DataGenerator(object):
                     generated_img = self.generate_image(img, mask, bg_img, self.image_size)
 
                     # formatting data for the network
-                    batch.append(cv2.split(generated_img))
-                    batch_labels.append(label)
-
                     batch.append(generated_img)
+                    batch_labels.append(self.labels_to_ints[label])
 
                     bg_index = (bg_index + 1) % len(self.bg_images)
                     img_index += 1
 
                 # converting to numpy arrays
-                batch = np.array(batch, dtype=np.float32)
+                batch = np.array(batch, dtype=np.float32) / 255
                 batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
                 yield batch, batch_labels
