@@ -27,6 +27,12 @@ class DataGenerator(object):
 
         self.bg_images = self.load_backgrounds()
 
+    def dump_labels_to_int_mapping(self, filename):
+        with open(filename, "w") as f:
+            for label in self.labels_to_ints:
+                index = self.labels_to_ints[label]
+                f.write("%s, %d\n" % (label, index))
+
     def load_backgrounds(self):
         bg_dir = os.path.join(self.data_root, "backgrounds")
         bg_files = os.listdir(bg_dir)

@@ -1,12 +1,8 @@
 import argparse
 import numpy as np
 import os
-from keras import applications
 from keras import optimizers
-from keras.engine import Model
-from keras.layers import Dropout, Flatten, Dense, BatchNormalization, Activation
-from keras import backend as k
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, CSVLogger
+from keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 
 from DataGenerator import DataGenerator
 
@@ -16,6 +12,15 @@ IMAGE_HEIGHT = 256
 BATCH_SIZE = 16
 
 np.random.seed(1337)  # for reproducibility
+
+
+def create_model_class(name):
+    module_name = "model_" + name
+    module = __import__(module_name)
+    class_name = "Model_" + name
+    class_ = getattr(module, class_name)
+    instance = class_()
+    return instance
 
 
 def parse_epoch(snapshot):
@@ -28,30 +33,6 @@ def parse_epoch(snapshot):
     return int(snapshot[i+1:j])
 
 
-def create_model(num_classes):
-    model = applications.ResNet50(weights="imagenet", include_top=False, input_shape=(IMAGE_WIDTH, IMAGE_HEIGHT, 3))
-
-    # freezing all layers
-    for layer in model.layers:
-        layer.trainable = False
-
-    x = model.output
-    x = Flatten()(x)
-
-    x = Dense(512)(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Dropout(0.5)(x)
-
-    x = Dense(128)(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    predictions = Dense(num_classes, activation='softmax')(x)
-    return Model(model.input, predictions)
-
-
 def finetune(args):
     train_data_generator = DataGenerator(args.data_root, "train", 100, 2, 1.1, 1.1, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
     val_data_generator = DataGenerator(args.data_root, "val", 100, 2, 1.1, 1.1, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
@@ -59,8 +40,9 @@ def finetune(args):
     num_classes = train_data_generator.get_num_classes()
 
     # creating model
-    model_name = "A"
-    model = create_model(num_classes)
+    model_name = args.model
+    model_obj = create_model_class(model_name)
+    model = model_obj.create_model(IMAGE_WIDTH, IMAGE_HEIGHT, num_classes)
 
     # preparing directories for snapshots
     if not os.path.exists(SNAPSHOTS_PATH):
@@ -69,6 +51,9 @@ def finetune(args):
     model_snapshot_path = os.path.join(SNAPSHOTS_PATH, model_name)
     if not os.path.exists(model_snapshot_path):
         os.mkdir(model_snapshot_path)
+
+    # saving labels to ints mapping
+    train_data_generator.dump_labels_to_int_mapping(os.path.join(model_snapshot_path, "labels.csv"))
 
     start_epoch = 0
     if args.snapshot is not None:
@@ -111,6 +96,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Finetune model')
     parser.add_argument("data_root", type=str, help="data root dir")
+    parser.add_argument("--model", type=str, help="name of the model")
     parser.add_argument("--snapshot", type=str, help="restart from snapshot")
 
     _args = parser.parse_args()
