@@ -16,8 +16,8 @@ np.random.seed(1337)  # for reproducibility
 
 
 def finetune(args):
-    train_data_generator = DataGenerator(args.data_root, "train", 100, 2, 1.1, 1.1, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
-    val_data_generator = DataGenerator(args.data_root, "val", 100, 2, 1.1, 1.1, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
+    train_data_generator = DataGenerator(args.data_root, "train", 100, 2, 1.1, 1.1, 5, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
+    val_data_generator = DataGenerator(args.data_root, "val", 100, 2, 1.1, 1.1, 5, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
 
     num_classes = train_data_generator.get_num_classes()
 

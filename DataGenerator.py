@@ -11,12 +11,13 @@ BG_RESOLUTION = 1024
 
 class DataGenerator(object):
     def __init__(self, data_root, dataset_type, max_rotation, max_zoom, max_saturation_delta, max_lightness_delta,
-                 batch_size, image_size):
+                 additive_noise, batch_size, image_size):
         self.data_root = data_root
         self.max_rotation = max_rotation
         self.max_zoom = max_zoom
         self.max_saturation_delta = max_saturation_delta
         self.max_lightness_delta = max_lightness_delta
+        self.additive_noise = additive_noise
         self.image_size = image_size
         self.batch_size = batch_size
 
@@ -158,7 +159,9 @@ class DataGenerator(object):
     def generate_image(self, img, mask, bg, dst_size):
         img, mask = self.transform_image(img, dst_size, mask)
         bg, _ = self.transform_image(bg, dst_size)
-        return self.render(img, mask, bg)
+        final_img = self.render(img, mask, bg)
+        final_img += np.random.randn(final_img.shape[0], final_img.shape[1], final_img.shape[2]) * self.additive_noise
+        return final_img
 
     def get_steps_per_epoch(self):
         return int(len(self.image_tuples) / self.batch_size)
@@ -199,6 +202,6 @@ class DataGenerator(object):
                     img_index += 1
 
                 # converting to numpy arrays
-                batch = np.array(batch, dtype=np.float32) / 255
+                batch = np.array(batch, dtype=np.float32) / 255.0
                 batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
                 yield batch, batch_labels
