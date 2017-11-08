@@ -1,15 +1,14 @@
 import argparse
-
 import os
 from multiprocessing import Pool
 
 import numpy as np
 import cv2
 
-from FilesAndDirs import get_n_pass_image_file_name, get_image_names_from_dir, \
+from FilesAndDirs import get_image_names_from_dir, \
     get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir, get_segmentation_dir, \
     create_dir, get_seg_file_name, get_parts_dir, get_parts_dir_name, clear_directory
-from ImageUtils import resize_to_resolution, shrink_mask, expand_mask
+from ImageUtils import resize_to_resolution
 
 IMG_RESOLUTION = 1024
 
@@ -80,10 +79,10 @@ def split_parts_for_image(img_file, out_dir):
             while True:
                 index = nz[nz_i]
                 seed_x = index % width
-                seed_y = index / width
+                seed_y = index // width
 
                 ff_mask = np.zeros((height+2, width+2), dtype=np.uint8)
-                area, rect = cv2.floodFill(mask, ff_mask, (seed_x, seed_y), 255, flags=cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE)
+                area, _, __, rect = cv2.floodFill(mask, ff_mask, (seed_x, seed_y), 255, flags=cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE)
 
                 x = rect[0]
                 y = rect[1]
@@ -149,32 +148,58 @@ def calc_color_key_features_lab(rgb):
     # return features_img, lab_split
 
 
+def clasterize(rgb, k=10):
+    as_list = rgb.reshape((-1, 3))
+    as_list = np.float32(as_list)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+
+    ret, labels, centers = cv2.kmeans(as_list, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+
+    centers = np.uint8(centers)
+    _, center_sizes = np.unique(labels.flatten(), return_counts=True)
+    biggest_colors = centers[np.argsort(center_sizes)]
+    res = centers[labels.flatten()] # What is that?
+
+    img = res.reshape((rgb.shape))
+    return img, centers, biggest_colors
+
+
 def create_default_mask(img_file, mask_dst_file):
     rgb = cv2.imread(get_downsampled_img_name(img_file))
 
-    img_features, img_hls = calc_color_key_features(rgb)
+    simplified, centers, biggest_colors = clasterize(rgb, k=10)
+    _, img_hls = calc_color_key_features(rgb)
+    img_features, _ = calc_color_key_features(simplified)
 
-    color_key1 = np.array([[163, 73, 164]], dtype=np.uint8).reshape((1,1,3))
-    key_features1, _ = calc_color_key_features(color_key1)
+    min_features, min_center = None, None
+    for i, color in enumerate(reversed(biggest_colors)):
+        color_key = np.array([color[0], color[1], color[2]], dtype=np.uint8).reshape((1, 1, 3))
+        features, _ = calc_color_key_features(color_key)
+        if min_features is not None:  # Try removing center colors
+            temp = np.linalg.norm(img_features - features, axis=2)
+            min_features = np.minimum(min_features, temp)
+        else:
+            min_features = np.linalg.norm(img_features - features, axis=2)
 
-    color_key2 = np.array([[200, 170, 200]], dtype=np.uint8).reshape((1,1,3))
-    key_features2, _ = calc_color_key_features(color_key2)
+        if i == 0: # Get rid only from the first, the biggest cener
+            break
 
-    color_key3 = np.array([[140, 80, 140]], dtype=np.uint8).reshape((1,1,3))
-    key_features3, _ = calc_color_key_features(color_key3)
 
-    diff1 = np.linalg.norm(img_features - key_features1, axis=2)
-    diff2 = np.linalg.norm(img_features - key_features2, axis=2)
-    diff3 = np.linalg.norm(img_features - key_features3, axis=2)
-    diff = np.minimum(np.minimum(diff1, diff2), diff3)
+    diff = min_features
+    cv2.imwrite(os.path.splitext(mask_dst_file)[0] + '_centered.png', simplified)
 
     diff_file = os.path.splitext(mask_dst_file)[0] + '_diff.png'
     k = 250.0 / np.max(diff)
     diff8 = (diff * k).astype(np.uint8)
+
+    # Increase certainty
+    threshold = np.vectorize(lambda x: 250 if x > 30 else x)
+    diff8 = threshold(diff8)
+
     cv2.imwrite(diff_file, diff8)
 
-    MAX_BG_DIFF = 0.2
-    MIN_FG_DIFF = 0.8
+    MAX_BG_DIFF = 0.1
+    MIN_FG_DIFF = 0.2
 
     # using hue distances only for valid pixels:
     # no color or lightness saturations
