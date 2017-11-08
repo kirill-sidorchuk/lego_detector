@@ -120,6 +120,16 @@ class DataGenerator(object):
         else:
             rotated_mask = None
 
+        if np.random.randint(100) < 50:
+            rotated = cv2.flip(rotated, 0)
+            if mask is not None:
+                rotated_mask = cv2.flip(rotated_mask, 0)
+
+        if np.random.randint(100) < 50:
+            rotated = cv2.flip(rotated, 1)
+            if mask is not None:
+                rotated_mask = cv2.flip(rotated_mask, 1)
+
         # random channel dropout
         if np.random.rand() < 0.5:
             bgr = cv2.split(rotated)
