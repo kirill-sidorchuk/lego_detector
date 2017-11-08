@@ -28,11 +28,15 @@ def parse_images_labels(files):
     file_labels = {}
     for filename in files:
         name = os.path.splitext(filename)[0]
-        i = name.find('-')
-        if i != -1:
-            name = name[0:i]
-        file_labels[filename] = name
+        file_labels[filename] = parse_filename_label(name)
     return file_labels
+
+
+def parse_filename_label(name):
+    i = name.find('-')
+    if i != -1:
+        name = name[0:i]
+    return name
 
 
 def load_image_data(filename):
@@ -71,18 +75,33 @@ def test(args):
     print("loading weights...")
     model.load_weights(os.path.join(snapshot_path, args.snapshot), by_name=True)
 
+    top_n = 5
+    top_1_acc = 0
+    top_5_acc = 0
     for filename in test_images:
         data = load_image_data(os.path.join(test_dir, filename))
         probs = model.predict(data.reshape(1, data.shape[0], data.shape[1], data.shape[2]))
         sample_index = 0
         sample_probs = probs[sample_index]
-        label_index = np.argmax(sample_probs)
-        label_prob = sample_probs[label_index]
-        label_name = int_to_labels_map[label_index]
-        print("%s: %s (%1.2f%%)" % (filename, label_name, label_prob*100.0))
+        sorted_indexes = np.argsort(sample_probs)
+        print("\n%s:" % filename)
+        true_label = parse_filename_label(os.path.splitext(filename)[0])
+        top_5_hit = False
+        for t in range(top_n):
+            label_index = sorted_indexes[-t-1]
+            label_prob = sample_probs[label_index]
+            label_name = int_to_labels_map[label_index]
+            if t == 0 and label_name == true_label:
+                top_1_acc += 1
+            if t < 5 and label_name == true_label:
+                top_5_hit = True
+            print("%1.2f%% %s" % (label_prob*100.0, label_name))
 
-    pass
+        if top_5_hit:
+            top_5_acc += 1
 
+    print("top 1 accuracy = %1.2f%%" % (top_1_acc*100.0/len(test_images)))
+    print("top 5 accuracy = %1.2f%%" % (top_5_acc*100.0/len(test_images)))
 
 if __name__ == "__main__":
 
