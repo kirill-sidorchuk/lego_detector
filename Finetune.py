@@ -8,16 +8,16 @@ from DataGenerator import DataGenerator
 from ModelUtils import create_model_class, parse_epoch
 
 SNAPSHOTS_PATH = "snapshots"
-IMAGE_WIDTH = 256
-IMAGE_HEIGHT = 256
-BATCH_SIZE = 16
+IMAGE_WIDTH = 224
+IMAGE_HEIGHT = 224
+BATCH_SIZE = 32
 
 np.random.seed(1337)  # for reproducibility
 
 
 def finetune(args):
-    train_data_generator = DataGenerator(args.data_root, "train", 100, 2, 1.1, 1.1, 5, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
-    val_data_generator = DataGenerator(args.data_root, "val", 100, 2, 1.1, 1.1, 5, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH))
+    train_data_generator = DataGenerator(args.data_root, "train", 100, 2, 1.1, 1.1, 5, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH), args.debug_epochs)
+    val_data_generator = DataGenerator(args.data_root, "val", 100, 2, 1.1, 1.1, 5, BATCH_SIZE, (IMAGE_HEIGHT, IMAGE_WIDTH), 0)
 
     num_classes = train_data_generator.get_num_classes()
 
@@ -80,6 +80,7 @@ if __name__ == "__main__":
     parser.add_argument("data_root", type=str, help="data root dir")
     parser.add_argument("--model", type=str, help="name of the model")
     parser.add_argument("--snapshot", type=str, help="restart from snapshot")
+    parser.add_argument("--debug_epochs", type=int, default=0, help="number of epochs to save debug images")
 
     _args = parser.parse_args()
     finetune(_args)

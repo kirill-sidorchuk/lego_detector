@@ -4,6 +4,7 @@ import cv2
 from keras.utils import to_categorical
 
 import ImageUtils
+from FilesAndDirs import clear_directory
 from FinalizeDataset import SORTED_DIR
 
 BG_RESOLUTION = 1024
@@ -11,7 +12,7 @@ BG_RESOLUTION = 1024
 
 class DataGenerator(object):
     def __init__(self, data_root, dataset_type, max_rotation, max_zoom, max_saturation_delta, max_lightness_delta,
-                 additive_noise, batch_size, image_size):
+                 additive_noise, batch_size, image_size, debug_epochs):
         self.data_root = data_root
         self.max_rotation = max_rotation
         self.max_zoom = max_zoom
@@ -20,6 +21,10 @@ class DataGenerator(object):
         self.additive_noise = additive_noise
         self.image_size = image_size
         self.batch_size = batch_size
+        self.debug_epochs = debug_epochs
+
+        if self.debug_epochs:
+            self.prepare_debug_dir()
 
         self.image_files, self.labels_to_ints = self.load_labels(dataset_type + ".txt")
         self.images = self.load_images()
@@ -33,6 +38,13 @@ class DataGenerator(object):
             for label in self.labels_to_ints:
                 index = self.labels_to_ints[label]
                 f.write("%s, %d\n" % (label, index))
+
+    def prepare_debug_dir(self):
+        self.debug_dir = os.path.join(self.data_root, "debug")
+        if not os.path.exists(self.debug_dir):
+            os.mkdir(self.debug_dir)
+        else:
+            clear_directory(self.debug_dir)
 
     def load_backgrounds(self):
         bg_dir = os.path.join(self.data_root, "backgrounds")
@@ -160,7 +172,9 @@ class DataGenerator(object):
         img, mask = self.transform_image(img, dst_size, mask)
         bg, _ = self.transform_image(bg, dst_size)
         final_img = self.render(img, mask, bg)
-        final_img += np.random.randn(final_img.shape[0], final_img.shape[1], final_img.shape[2]) * self.additive_noise
+        final_img = np.clip(final_img.astype(np.int32) + \
+                    (np.random.randn(final_img.shape[0], final_img.shape[1], final_img.shape[2]) * self.additive_noise).astype(np.int32),
+                    0, 255).astype(np.uint8)
         return final_img
 
     def get_steps_per_epoch(self):
@@ -168,6 +182,10 @@ class DataGenerator(object):
 
     def generate(self):
         'Generates batches of samples'
+
+        debug_epoch = self.debug_epochs
+        epoch = 0
+
         # Infinite loop
         while 1:
             # Generate order of exploration of dataset
@@ -175,6 +193,9 @@ class DataGenerator(object):
             np.random.shuffle(img_indexes)
             bg_indexes = np.arange(len(self.bg_images))
             np.random.shuffle(bg_indexes)
+
+            epoch += 1
+            debug_epoch -= 1
 
             # Generate batches
             bg_index = 0
@@ -193,6 +214,10 @@ class DataGenerator(object):
                     bg_img = self.bg_images[_bg_index]
 
                     generated_img = self.generate_image(img, mask, bg_img, self.image_size)
+                    if debug_epoch >= 0:
+                        # saving generated image
+                        filename = os.path.join(self.debug_dir, "%02d_%03d.jpg" % (epoch, b))
+                        cv2.imwrite(filename, generated_img)
 
                     # formatting data for the network
                     batch.append(generated_img)
