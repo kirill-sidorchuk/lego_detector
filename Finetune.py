@@ -5,6 +5,7 @@ from keras import optimizers
 from keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 
 from DataGenerator import DataGenerator
+from ModelUtils import create_model_class, parse_epoch
 
 SNAPSHOTS_PATH = "snapshots"
 IMAGE_WIDTH = 256
@@ -12,25 +13,6 @@ IMAGE_HEIGHT = 256
 BATCH_SIZE = 16
 
 np.random.seed(1337)  # for reproducibility
-
-
-def create_model_class(name):
-    module_name = "model_" + name
-    module = __import__(module_name)
-    class_name = "Model_" + name
-    class_ = getattr(module, class_name)
-    instance = class_()
-    return instance
-
-
-def parse_epoch(snapshot):
-    i = snapshot.find('-')
-    if i == -1:
-        return 0
-    j = snapshot.find('-', i+1)
-    if j == -1:
-        return 0
-    return int(snapshot[i+1:j])
 
 
 def finetune(args):
