@@ -42,11 +42,20 @@ def load_image_data(filename):
     return img.astype(np.float32) / 255.0
 
 
+def create_int_to_labels_map(name_to_int):
+    int_to_name = {}
+    for name in name_to_int:
+        index = name_to_int[name]
+        int_to_name[index] = name
+    return int_to_name
+
+
 def test(args):
     test_dir = os.path.join(args.data_root, TEST_DIR)
 
     snapshot_path = os.path.join(args.data_root, SNAPSHOTS_PATH, args.model)
     labels_map = load_labels_to_int_mapping(os.path.join(snapshot_path, "labels.csv"))
+    int_to_labels_map = create_int_to_labels_map(labels_map)
 
     num_classes = len(labels_map)
     print("%d classes for model %s" % (num_classes, args.model))
@@ -65,9 +74,11 @@ def test(args):
     for filename in test_images:
         data = load_image_data(os.path.join(test_dir, filename))
         probs = model.predict(data.reshape(1, data.shape[0], data.shape[1], data.shape[2]))
-        label_index = np.argmax(probs)
-        label_prob = probs[label_index]
-        label_name = labels_map[label_index]
+        sample_index = 0
+        sample_probs = probs[sample_index]
+        label_index = np.argmax(sample_probs)
+        label_prob = sample_probs[label_index]
+        label_name = int_to_labels_map[label_index]
         print("%s: %s (%1.2f%%)" % (filename, label_name, label_prob*100.0))
 
     pass
