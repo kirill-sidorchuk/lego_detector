@@ -1,6 +1,9 @@
 import argparse
 import numpy as np
 import os
+
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
+
 from keras import optimizers
 from keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
 
@@ -17,9 +20,9 @@ np.random.seed(1337)  # for reproducibility
 
 def finetune(args):
     train_data_generator = DataGenerator(args.data_root, "train", 90, (0.7, 1.2), (1, 3), 0.3, 0.3, 5, BATCH_SIZE,
-                                         (IMAGE_HEIGHT, IMAGE_WIDTH), args.debug_epochs, True, True, True)
-    val_data_generator = DataGenerator(args.data_root, "val", 90, (0.7, 1.2), (1, 3), 0.3, 0.3, 5, BATCH_SIZE,
                                          (IMAGE_HEIGHT, IMAGE_WIDTH), 0, True, True, True)
+    val_data_generator = DataGenerator(args.data_root, "val", 90, (0.7, 1.2), (1, 3), 0.3, 0.3, 5, BATCH_SIZE,
+                                         (IMAGE_HEIGHT, IMAGE_WIDTH), 4, True, True, True)
 
     num_classes = train_data_generator.get_num_classes()
 
@@ -48,8 +51,8 @@ def finetune(args):
     # print summary
     model.summary()
 
-    nb_epoch = 400
-    sgd = optimizers.Adam(lr=0.001, decay=1e-4, beta_1=0.9)
+    nb_epoch = 800
+    sgd = optimizers.Adam(lr=1e-5, decay=1e-4, beta_1=0.9)
 
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['acc'])
     filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{val_acc:.3f}.hdf5")
