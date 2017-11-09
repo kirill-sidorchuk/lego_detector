@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import cv2
-#from keras.utils import to_categorical
+from keras.utils import to_categorical
 
 import ImageUtils
 from FilesAndDirs import clear_directory
@@ -200,14 +200,11 @@ class DataGenerator(object):
         if mask is not None:
             rotated_mask = cv2.warpAffine(mask, mat, dst_size, flags=cv2.INTER_AREA, borderMode=border_mode,
                                           borderValue=0)
-            try:
-                nozero_coords = np.where(rotated_mask != 0)
-                tl = (min(nozero_coords[1]), min(nozero_coords[0]))
-                br = (max(nozero_coords[1]), max(nozero_coords[0]))
-                rotated = rotated[tl[1]:br[1], tl[0]:br[0]]
-                rotated_mask = rotated_mask[tl[1]:br[1], tl[0]:br[0]]
-            except Exception as e:
-                pass
+            nozero_coords = np.where(rotated_mask != 0)
+            tl = (min(nozero_coords[1]), min(nozero_coords[0]))
+            br = (max(nozero_coords[1]), max(nozero_coords[0]))
+            rotated = rotated[tl[1]:br[1], tl[0]:br[0]]
+            rotated_mask = rotated_mask[tl[1]:br[1], tl[0]:br[0]]
         else:
             rotated_mask = None
         return rotated, rotated_mask
@@ -295,5 +292,5 @@ class DataGenerator(object):
 
                 # converting to numpy arrays
                 batch = np.array(batch, dtype=np.float32) / 255.0
-                batch_labels = 0 #to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
+                batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
                 yield batch, batch_labels
