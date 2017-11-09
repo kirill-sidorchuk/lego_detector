@@ -86,6 +86,7 @@ class DataGenerator(object):
 
     def load_images(self):
         images = {}
+        max_img_size = (max(self.image_size)*2)//3
         for _class in self.image_files:
             imgs = self.image_files[_class]
             for img_file in imgs:
@@ -93,6 +94,9 @@ class DataGenerator(object):
                 img = cv2.imread(img_file)
                 if img is None:
                     raise Exception("cannot read " + img_file)
+
+                if max(img.shape) > max_img_size:
+                    img = ImageUtils.resize_to_resolution(img, max_img_size)
 
                 # create mask
                 img_bw = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -167,6 +171,20 @@ class DataGenerator(object):
         return img, mask
 
     def random_rotation(self, dst_size, img, mask):
+        if mask is not None:
+            # pasting image into a bigger square matrix to prevent edge clipping
+            w = img.shape[1]
+            h = img.shape[0]
+            big_size = max(w, h) * 2
+            big_img = np.zeros((big_size, big_size, 3), dtype=np.uint8)
+            big_mask = np.zeros((big_size, big_size), dtype=np.uint8)
+            x0 = (big_size - w)//2
+            y0 = (big_size - h)//2
+            big_img[y0:y0 + h, x0:x0 + w, :] = img
+            big_mask[y0:y0 + h, x0:x0 + w] = mask
+            img = big_img
+            mask = big_mask
+
         center = (img.shape[1] / 2, img.shape[0] / 2)
         angle = np.random.rand() * self.max_rotation
         scale = 1  # + np.random.rand() * self.max_zoom
@@ -176,10 +194,14 @@ class DataGenerator(object):
         if mask is not None:
             rotated_mask = cv2.warpAffine(mask, mat, dst_size, flags=cv2.INTER_AREA, borderMode=border_mode,
                                           borderValue=0)
-            tl = (min(np.where(rotated_mask != 0)[1]), min(np.where(rotated_mask != 0)[0]))
-            br = (max(np.where(rotated_mask != 0)[1]), max(np.where(rotated_mask != 0)[0]))
-            rotated = rotated[tl[1]:br[1], tl[0]:br[0]]
-            rotated_mask = rotated_mask[tl[1]:br[1], tl[0]:br[0]]
+            try:
+                nozero_coords = np.where(rotated_mask != 0)
+                tl = (min(nozero_coords[1]), min(nozero_coords[0]))
+                br = (max(nozero_coords[1]), max(nozero_coords[0]))
+                rotated = rotated[tl[1]:br[1], tl[0]:br[0]]
+                rotated_mask = rotated_mask[tl[1]:br[1], tl[0]:br[0]]
+            except Exception as e:
+                pass
         else:
             rotated_mask = None
         return rotated, rotated_mask

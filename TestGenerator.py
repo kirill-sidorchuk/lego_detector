@@ -4,9 +4,9 @@ from DataGenerator import DataGenerator
 
 
 def test_generator(args):
-    generator = DataGenerator(args.data_root, "train", 1, 1, 0, 0, 0, 32, (224, 224), 3, False, False, False)
+    generator = DataGenerator(args.data_root, "train", 90, 1, 0, 0, 0, 32, (224, 224), 3, False, False, False)
 
-    n_samples = 1000
+    n_samples = 100
     i = 0
     for img in generator.generate():
         i += 1
