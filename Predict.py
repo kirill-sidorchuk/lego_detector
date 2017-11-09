@@ -75,21 +75,32 @@ def test(args):
     print("loading weights...")
     model.load_weights(os.path.join(snapshot_path, args.snapshot), by_name=True)
 
+    tta_hflip = True
+    tta_vflip = True
+
     top_n = 5
     top_1_acc = 0
     top_5_acc = 0
     for filename in test_images:
+        tta_batch = []
         data = load_image_data(os.path.join(test_dir, filename))
-        probs = model.predict(data.reshape(1, data.shape[0], data.shape[1], data.shape[2]))
-        sample_index = 0
-        sample_probs = probs[sample_index]
-        sorted_indexes = np.argsort(sample_probs)
+        tta_batch.append(data)
+        if tta_hflip:
+            tta_batch.append(cv2.flip(data, 0))
+        if tta_vflip:
+            tta_batch.append(cv2.flip(data, 1))
+        probs_all = model.predict(np.array(tta_batch, dtype=np.float32))
+
+        # averaging probabilities
+        probs = np.mean(probs_all, axis=0)
+
+        sorted_indexes = np.argsort(probs)
         print("\n%s:" % filename)
         true_label = parse_filename_label(os.path.splitext(filename)[0])
         top_5_hit = False
         for t in range(top_n):
             label_index = sorted_indexes[-t-1]
-            label_prob = sample_probs[label_index]
+            label_prob = probs[label_index]
             label_name = int_to_labels_map[label_index]
             if t == 0 and label_name == true_label:
                 top_1_acc += 1
