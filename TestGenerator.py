@@ -4,7 +4,7 @@ from DataGenerator import DataGenerator
 
 
 def test_generator(args):
-    generator = DataGenerator(args.data_root, "train", 100, 2, 1.1, 1.1, 5, 32, (224, 224), 3)
+    generator = DataGenerator(args.data_root, "train", 1, 1, 0, 0, 0, 32, (224, 224), 3, False, False, False)
 
     n_samples = 1000
     i = 0
