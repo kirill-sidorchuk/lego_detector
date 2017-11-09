@@ -11,12 +11,13 @@ BG_RESOLUTION = 1024
 
 
 class DataGenerator(object):
-    def __init__(self, data_root, dataset_type, max_rotation, max_zoom, max_saturation_delta, max_lightness_delta,
+    def __init__(self, data_root, dataset_type, max_rotation, max_img_zoom, max_bg_zoom, max_saturation_delta, max_lightness_delta,
                  additive_noise, batch_size, image_size, debug_epochs,
                  aug_flip, aug_channel_dropout, aug_hue):
         self.data_root = data_root
         self.max_rotation = max_rotation
-        self.max_zoom = max_zoom
+        self.max_img_zoom = max_img_zoom
+        self.max_bg_zoom = max_bg_zoom
         self.max_saturation_delta = max_saturation_delta
         self.max_lightness_delta = max_lightness_delta
         self.additive_noise = additive_noise
@@ -187,7 +188,12 @@ class DataGenerator(object):
 
         center = (img.shape[1] / 2, img.shape[0] / 2)
         angle = np.random.rand() * self.max_rotation
-        scale = 1  # + np.random.rand() * self.max_zoom
+        if mask is None:
+            max_zoom = self.max_bg_zoom
+        else:
+            max_zoom = self.max_img_zoom
+
+        scale = max_zoom[0] + np.random.rand() * (max_zoom[1] - max_zoom[0])
         mat = cv2.getRotationMatrix2D(center, angle, scale)
         border_mode = cv2.BORDER_REFLECT_101 if mask is None else cv2.BORDER_CONSTANT
         rotated = cv2.warpAffine(img, mat, dst_size, flags=cv2.INTER_AREA, borderMode=border_mode, borderValue=0)
