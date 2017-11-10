@@ -4,7 +4,12 @@ import os
 def clear_directory(dir_name):
     files = os.listdir(dir_name)
     for file_name in files:
-        os.remove(os.path.join(dir_name, file_name))
+        path_to_remove = os.path.join(dir_name, file_name)
+        if os.path.isdir(path_to_remove):
+            clear_directory(path_to_remove)
+            os.rmdir(path_to_remove)
+        else:
+            os.remove(path_to_remove)
 
 
 def get_image_names_from_dir(data_dir):
