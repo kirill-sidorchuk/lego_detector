@@ -174,26 +174,37 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
                 for im in robot_images:
                     print("\t%s" % os.path.split(im)[1])
 
-                sorted_indexes = np.argsort(probs)
+                N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
+                                                                 top_5_acc, top_n)
+        else:
+            for img_file in image_files:
+                print("\t%s" % os.path.split(img_file)[1])
+                probs = predict_with_tta(tta, False, [img_file], model)[0]
 
-                true_label = label_dir
-                top_5_hit = False
-                for t in range(top_n):
-                    label_index = sorted_indexes[-t-1]
-                    label_prob = probs[label_index]
-                    label_name = int_to_labels_map[label_index]
-                    if t == 0 and label_name == true_label:
-                        top_1_acc += 1
-                    if t < 5 and label_name == true_label:
-                        top_5_hit = True
-                    print("%1.2f%% %s" % (label_prob*100.0, label_name))
-
-                if top_5_hit:
-                    top_5_acc += 1
-                N += 1
+                N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
+                                                                 top_5_acc, top_n)
 
     print("top 1 accuracy = %1.2f%%" % (top_1_acc*100.0/N))
     print("top 5 accuracy = %1.2f%%" % (top_5_acc*100.0/N))
+
+
+def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, top_5_acc, top_n):
+    sorted_indexes = np.argsort(probs)
+    true_label = label_dir
+    top_5_hit = False
+    for t in range(top_n):
+        label_index = sorted_indexes[-t - 1]
+        label_prob = probs[label_index]
+        label_name = int_to_labels_map[label_index]
+        if t == 0 and label_name == true_label:
+            top_1_acc += 1
+        if t < 5 and label_name == true_label:
+            top_5_hit = True
+        print("%1.2f%% %s" % (label_prob * 100.0, label_name))
+    if top_5_hit:
+        top_5_acc += 1
+    N += 1
+    return N, top_1_acc, top_5_acc
 
 
 def test(args):
