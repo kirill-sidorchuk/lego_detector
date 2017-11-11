@@ -8,7 +8,7 @@ import cv2
 from FilesAndDirs import get_image_names_from_dir, \
     get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir, get_segmentation_dir, \
     create_dir, get_seg_file_name, get_parts_dir, get_parts_dir_name, clear_directory
-from ImageUtils import resize_to_resolution
+from ImageUtils import resize_to_resolution, expand_mask, shrink_mask
 
 IMG_RESOLUTION = 1024
 
@@ -30,7 +30,7 @@ def create_segmentation(img_file, seg_file):
         # converting to grayscale
         mask_img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2GRAY)
 
-        mask = np.ones(img.shape[:2], np.uint8) * cv2.GC_PR_BGD
+        mask = np.ones(img.shape[:2], np.uint8) * cv2.GC_PR_FGD
         mask[mask_img == 0] = cv2.GC_BGD
         mask[mask_img == 255] = cv2.GC_FGD
 
@@ -139,13 +139,6 @@ def calc_color_key_features(rgb):
 
 def calc_color_key_features_lab(rgb):
     return calc_color_key_features(rgb)
-    # lab = cv2.cvtColor(rgb, cv2.COLOR_BGR2LAB).astype(np.float32)
-    # lab_split = cv2.split(lab)
-    # l = lab_split[0]
-    # a = lab_split[1]
-    # b = lab_split[2]
-    # features_img = cv2.merge(np.array([l*0.01, a, b], dtype=np.float32))
-    # return features_img, lab_split
 
 
 def clasterize(rgb, k=10):
@@ -164,65 +157,68 @@ def clasterize(rgb, k=10):
     return img, centers, biggest_colors
 
 
-def create_default_mask(img_file, mask_dst_file):
+def create_default_mask(img_file, mask_dst_file, debug_images=False):
+    mask_dir, mask_filename = os.path.split(mask_dst_file)
+    mask_title = os.path.splitext(mask_filename)[0]
+
     rgb = cv2.imread(get_downsampled_img_name(img_file))
 
-    simplified, centers, biggest_colors = clasterize(rgb, k=10)
-    _, img_hls = calc_color_key_features(rgb)
-    img_features, _ = calc_color_key_features(simplified)
+    # detecting edges
+    split = cv2.split(rgb)
+    acc = np.zeros(split[0].shape, dtype=np.float32)
+    for img in split:
+        edges = cv2.Canny(img, 100, 200)
+        acc += edges
+    cv2.normalize(acc, acc, 255, 0, cv2.NORM_MINMAX)
+    acc = cv2.threshold(acc, 15, 255, cv2.THRESH_BINARY)[1]
+    if debug_images:
+        edge_file = os.path.join(mask_dir, mask_title + "_edge.png")
+        cv2.imwrite(edge_file, acc)
 
-    min_features, min_center = None, None
-    for i, color in enumerate(reversed(biggest_colors)):
-        color_key = np.array([color[0], color[1], color[2]], dtype=np.uint8).reshape((1, 1, 3))
-        features, _ = calc_color_key_features(color_key)
-        if min_features is not None:  # Try removing center colors
-            temp = np.linalg.norm(img_features - features, axis=2)
-            min_features = np.minimum(min_features, temp)
-        else:
-            min_features = np.linalg.norm(img_features - features, axis=2)
+    # detecting empty areas
+    edges = (255 - acc).astype(np.uint8)
+    distances = cv2.distanceTransform(edges, cv2.DIST_L2, 5)
+    bg_mask = cv2.threshold(distances, 25, 255, cv2.THRESH_BINARY)[1].astype(np.uint8)
+    cv2.normalize(distances, distances, 255, 0, cv2.NORM_MINMAX)
+    if debug_images:
+        dist_file = os.path.join(mask_dir, mask_title + "_dist.png")
+        cv2.imwrite(dist_file, distances)
 
-        if i == 0: # Get rid only from the first, the biggest cener
+    bg_image = rgb.copy()
+    bg_image[bg_mask != 0] = 0
+    if debug_images:
+        bg_mask_file = os.path.join(mask_dir, mask_title + "_bgmask.png")
+        cv2.imwrite(bg_mask_file, bg_image)
+
+    ffmask = np.zeros((rgb.shape[0]+2, rgb.shape[1]+2), dtype=np.uint8)
+    seed_points = np.column_stack(np.where(bg_mask != 0))
+    np.random.shuffle(seed_points)
+    seed = seed_points[0]
+    width = rgb.shape[1]
+    height = rgb.shape[0]
+    iter = 0
+    while True:
+
+        area, _, _, rect = cv2.floodFill(rgb, ffmask, (seed[1], seed[0]), 255, loDiff=(3,3,3,3), upDiff=(3,3,3,3), flags=(4 | (255 << 8) | cv2.FLOODFILL_MASK_ONLY))
+
+        bg_mask = cv2.bitwise_or(ffmask[1:1+height, 1:1+width], bg_mask)
+        seed_points = np.column_stack(np.where(bg_mask != 0))
+        if len(seed_points) == 0:
             break
 
+        np.random.shuffle(seed_points)
+        seed = seed_points[0]
 
-    diff = min_features
-    cv2.imwrite(os.path.splitext(mask_dst_file)[0] + '_centered.png', simplified)
+        iter += 1
+        if iter > 10:
+            break
 
-    diff_file = os.path.splitext(mask_dst_file)[0] + '_diff.png'
-    k = 250.0 / np.max(diff)
-    diff8 = (diff * k).astype(np.uint8)
+    bg_mask = shrink_mask(bg_mask, 3, 2)
 
-    # Increase certainty
-    threshold = np.vectorize(lambda x: 250 if x > 30 else x)
-    diff8 = threshold(diff8)
+    bg_image = rgb.copy()
+    bg_image[bg_mask != 0] = 0
+    cv2.imwrite(mask_dst_file, bg_image)
 
-    cv2.imwrite(diff_file, diff8)
-
-    MAX_BG_DIFF = 0.1
-    MIN_FG_DIFF = 0.2
-
-    # using hue distances only for valid pixels:
-    # no color or lightness saturations
-    MIN_LIGHTNESS = 0.3
-    MIN_COLOR_SATURATION = 0.1
-    l = img_hls[1]  # lightness
-    s = img_hls[2]  # saturation
-    valid_pixels = (l > MIN_LIGHTNESS) * (s > MIN_COLOR_SATURATION)
-
-    valid_file = os.path.splitext(mask_dst_file)[0] + '_valid.png'
-    cv2.imwrite(valid_file, valid_pixels.astype(np.uint8) * 255)
-
-    bg_mask = (diff < MAX_BG_DIFF) * valid_pixels
-    fg_mask = (diff > MIN_FG_DIFF) * valid_pixels
-    # unknown_mask = ~(bg_mask + fg_mask)
-    # unknown_mask = expand_mask(unknown_mask.astype(np.uint8), 1)
-    # bg_mask = bg_mask * (~unknown_mask)
-    # fb_mask = fg_mask * (~unknown_mask)
-
-    rgb[bg_mask] = np.array([0,0,0], dtype=np.uint8)
-    rgb[fg_mask] = np.array([255,255,255], dtype=np.uint8)
-
-    cv2.imwrite(mask_dst_file, rgb)
     return img_file
 
 
