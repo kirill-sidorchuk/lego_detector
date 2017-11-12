@@ -6,7 +6,6 @@ import numpy as np
 import os
 
 import cv2
-from keras.engine import Model
 from keras.utils import to_categorical
 
 from FilesAndDirs import clear_directory
