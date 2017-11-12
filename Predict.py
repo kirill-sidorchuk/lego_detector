@@ -57,34 +57,37 @@ def create_int_to_labels_map(name_to_int):
     return int_to_name
 
 
+def rotate(img):
+    width = img.shape[1]
+    height = img.shape[0]
+    angle = np.random.rand() * 45
+    scale = 1 + np.random.rand() * 1.2
+    M = cv2.getRotationMatrix2D((width / 2, height / 2), angle, scale)
+    return cv2.warpAffine(img, M, (width, height))
+
+
 def predict_with_tta(tta, robot_tta, images, model):
     tta_hflip = tta > 0
     tta_vflip = tta > 1
+    tta_rotate = tta > 2
 
     results = []
 
     if robot_tta:
         tta_batch = []
         for image_file in images:
-            # print("%s" % image_file)
             data = load_image_data(image_file)
             tta_batch.append(data)
-            if tta_hflip:
-                tta_batch.append(cv2.flip(data, 0))
-            if tta_vflip:
-                tta_batch.append(cv2.flip(data, 1))
+            augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip)
+
         probs_all = model.predict(np.array(tta_batch, dtype=np.float32))
         results.append(np.mean(probs_all, axis=0))
     else:
         for image_file in images:
-            # print("%s" % image_file)
             tta_batch = []
             data = load_image_data(image_file)
             tta_batch.append(data)
-            if tta_hflip:
-                tta_batch.append(cv2.flip(data, 0))
-            if tta_vflip:
-                tta_batch.append(cv2.flip(data, 1))
+            augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip)
             probs_all = model.predict(np.array(tta_batch, dtype=np.float32))
 
             # averaging probabilities
@@ -92,6 +95,15 @@ def predict_with_tta(tta, robot_tta, images, model):
             results.append(probs)
 
     return results
+
+
+def augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip):
+    if tta_hflip:
+        tta_batch.append(cv2.flip(data, 0))
+    if tta_vflip:
+        tta_batch.append(cv2.flip(data, 1))
+    if tta_rotate:
+        tta_batch.append(rotate(data))
 
 
 def sort_images(test_dir, tta, model):
