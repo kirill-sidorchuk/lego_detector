@@ -40,8 +40,14 @@ Runs training.\
 --snapshot <i>file</i> [optional] specifies a snapshot file to restart training from.\
 --debug_epochs <i>N</i> [optional] specifies number of training epochs to save images fed to network. These images will be written in data_root_dir/debug directory.
  
-<b>python3 Predict.py --model <i>A</i> --snapshot <i>weights-784-0.969.hdf5</i></b>\
-Runs prediction on test set (from 'test' subdirectory).\
+<b>python3 Predict.py new_test\sorted measure --tta 2 --rtta 0 --model A --snapshot weights-784-0.969.hdf5</b>\
+Runs prediction on test set (from 'new_test\sorted' subdirectory).\
+There are two modes: 'measure' and 'sort'
+* measure will calculate top1 and top5 accuracies given images with known labels, stored to directories (one directory - one class). Classification results and final accuracies are written to console.
+
+* sort will sort images with unknown labels into directories - dir name will correspond to predicted class label.
+
 --model and --snapshot arguments are the same as for 'Finetune.py' script.\
-Classification results and final accuracies are written to console.
+--tta 0 means no test time data augmentation, 1 - do vertical flip, 2 - do vertical and horizontal flips.\
+--rtta <1 means no robot test time data augmentation, 2 and more means take that many images from sorted directory and average results. 
  
