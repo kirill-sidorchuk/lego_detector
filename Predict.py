@@ -61,9 +61,9 @@ def rotate(img):
     width = img.shape[1]
     height = img.shape[0]
     angle = np.random.rand() * 45
-    scale = 1 + np.random.rand() * 1.2
+    scale = 1 + np.random.rand() * 1.1
     M = cv2.getRotationMatrix2D((width / 2, height / 2), angle, scale)
-    return cv2.warpAffine(img, M, (width, height))
+    return cv2.warpAffine(img, M, (width, height), flags=cv2.INTER_AREA, borderMode=(cv2.BORDER_REFLECT_101))
 
 
 def predict_with_tta(tta, robot_tta, images, model):
@@ -249,6 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("mode", type=str, default="measure", help="predict mode: measure or sort")
     parser.add_argument("--tta", type=int, default=0, help="0 - no TTA, 1 - hflip, 2 - vflip+hflip")
     parser.add_argument("--rtta", type=int, default=0, help="Robot TTA. <1 - no TTA, >1 - number of images to take for TTA")
+    parser.add_argument("--tta_mode", type=str, default="mean", help="'mean' or 'majority' voting TTA")
     parser.add_argument("--model", type=str, help="model")
     parser.add_argument("--snapshot", type=str, help="snapshot")
 
