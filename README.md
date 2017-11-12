@@ -50,4 +50,4 @@ There are two modes: 'measure' and 'sort'
 --model and --snapshot arguments are the same as for 'Finetune.py' script.\
 --tta 0 means no test time data augmentation, 1 - do vertical flip, 2 - do vertical and horizontal flips.\
 --rtta <1 means no robot test time data augmentation, 2 and more means take that many images from sorted directory and average results. 
- 
+--tta_mode 'mean' or 'majority' aggregation method for TTA. Default is 'mean'.

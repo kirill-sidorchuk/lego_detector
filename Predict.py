@@ -7,6 +7,7 @@ import os
 
 import cv2
 from keras.engine import Model
+from keras.utils import to_categorical
 
 from FilesAndDirs import clear_directory
 from Finetune import IMAGE_HEIGHT, IMAGE_WIDTH
@@ -66,7 +67,7 @@ def rotate(img):
     return cv2.warpAffine(img, M, (width, height), flags=cv2.INTER_AREA, borderMode=(cv2.BORDER_REFLECT_101))
 
 
-def predict_with_tta(tta, robot_tta, images, model):
+def predict_with_tta(tta, robot_tta, images, model, tta_mode='mean'):
     tta_hflip = tta > 0
     tta_vflip = tta > 1
     tta_rotate = tta > 2
@@ -81,7 +82,7 @@ def predict_with_tta(tta, robot_tta, images, model):
             augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip)
 
         probs_all = model.predict(np.array(tta_batch, dtype=np.float32))
-        results.append(np.mean(probs_all, axis=0))
+        aggregate_ensemble_probs(probs_all, results, tta_mode)
     else:
         for image_file in images:
             tta_batch = []
@@ -91,10 +92,17 @@ def predict_with_tta(tta, robot_tta, images, model):
             probs_all = model.predict(np.array(tta_batch, dtype=np.float32))
 
             # averaging probabilities
-            probs = np.mean(probs_all, axis=0)
-            results.append(probs)
+            aggregate_ensemble_probs(probs_all, results, tta_mode)
 
     return results
+
+
+def aggregate_ensemble_probs(probs_all, results, tta_mode):
+    if tta_mode == 'mean':
+        results.append(np.mean(probs_all, axis=0))
+    else:
+        counts = np.sum(to_categorical(np.argmax(probs_all, axis=1), num_classes=len(probs_all[0])), axis=0)
+        results.append(counts / np.sum(counts))
 
 
 def augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip):
@@ -145,7 +153,7 @@ def sort_images(test_dir, tta, model):
         copyfile(src_image, dst_image_path)
 
 
-def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_map):
+def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_map, tta_mode):
 
     dirs = os.listdir(test_dir)
     test_dirs = []
@@ -181,7 +189,7 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
             for i in range(n_batches):
                 offset = i * robot_tta
                 robot_images = image_files[offset: offset + robot_tta]
-                probs = predict_with_tta(tta, True, robot_images, model)[0]
+                probs = predict_with_tta(tta, True, robot_images, model, tta_mode)[0]
 
                 for im in robot_images:
                     print("\t%s" % os.path.split(im)[1])
@@ -191,7 +199,7 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
         else:
             for img_file in image_files:
                 print("\t%s" % os.path.split(img_file)[1])
-                probs = predict_with_tta(tta, False, [img_file], model)[0]
+                probs = predict_with_tta(tta, False, [img_file], model, tta_mode)[0]
 
                 N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
                                                                  top_5_acc, top_n)
@@ -238,7 +246,7 @@ def test(args):
     if args.mode.lower() == "sort":
         sort_images(test_dir, args.tta, model)
     elif args.mode.lower() == "measure":
-        measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map)
+        measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
 
 
 if __name__ == "__main__":
