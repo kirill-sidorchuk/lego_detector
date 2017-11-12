@@ -2,13 +2,13 @@ import argparse
 import os
 from multiprocessing import Pool
 
-import numpy as np
 import cv2
+import numpy as np
 
 from FilesAndDirs import get_image_names_from_dir, \
     get_downsampled_dir, get_downsampled_img_name, get_masks_dir, get_mask_file_name, get_raw_dir, get_segmentation_dir, \
     create_dir, get_seg_file_name, get_parts_dir, get_parts_dir_name, clear_directory
-from ImageUtils import resize_to_resolution, expand_mask, shrink_mask
+from ImageUtils import resize_to_resolution, shrink_mask
 
 IMG_RESOLUTION = 1024
 
@@ -90,14 +90,13 @@ def split_parts_for_image(img_file, out_dir):
                 h = rect[3]
 
                 # slicing into found rect
-                roi = mask[y:y+h, x:x+w]
                 roi_mask = ff_mask[y+1:y+1+h, x+1:x+1+w]
 
                 found = False
                 if min_area < area < max_area:
-                    found_mask = ff_mask
-                    found_image = segmented_img[y:y+h, x:x+w][:]
-                    found_image[roi_mask == 0] = 0
+                    found_mask = roi_mask
+                    found_image = segmented_img[y:y+h, x:x+w].copy()
+                    found_image[roi_mask == 0] = 0  # removing background
                     found = True
 
                 # clearing found component in the mask
@@ -116,45 +115,10 @@ def split_parts_for_image(img_file, out_dir):
                 part_file = os.path.join(out_dir, "%s_%02d.png" % (title, part_index))
                 cv2.imwrite(part_file, found_image)
                 part_index += 1
-                # print "#%d: area = %d, rect = %s" % (part_index, area, str(rect))
 
         return img_file, True
     except Exception as _:
         return img_file, False
-
-
-def calc_color_key_features(rgb):
-    hls = cv2.cvtColor(rgb.astype(np.float32)/255.0, cv2.COLOR_BGR2HLS)
-    hls_split = cv2.split(hls)
-    h = hls_split[0]
-    l = hls_split[1]
-    s = hls_split[2]
-    k = 3.14159 / 180
-    float_h = h.astype(np.float32) * k
-    cos_h = np.cos(float_h)
-    sin_h = np.sin(float_h)
-    features_img = cv2.merge([cos_h, sin_h, (l * 0.2/255).astype(np.float32), (s * 0.8/255).astype(np.float32)])
-    return features_img, hls_split
-
-
-def calc_color_key_features_lab(rgb):
-    return calc_color_key_features(rgb)
-
-
-def clasterize(rgb, k=10):
-    as_list = rgb.reshape((-1, 3))
-    as_list = np.float32(as_list)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-
-    ret, labels, centers = cv2.kmeans(as_list, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-
-    centers = np.uint8(centers)
-    _, center_sizes = np.unique(labels.flatten(), return_counts=True)
-    biggest_colors = centers[np.argsort(center_sizes)]
-    res = centers[labels.flatten()] # What is that?
-
-    img = res.reshape((rgb.shape))
-    return img, centers, biggest_colors
 
 
 def create_default_mask(img_file, mask_dst_file, debug_images=False):
@@ -196,10 +160,9 @@ def create_default_mask(img_file, mask_dst_file, debug_images=False):
     seed = seed_points[0]
     width = rgb.shape[1]
     height = rgb.shape[0]
-    iter = 0
-    while True:
-
-        area, _, _, rect = cv2.floodFill(rgb, ffmask, (seed[1], seed[0]), 255, loDiff=(3,3,3,3), upDiff=(3,3,3,3), flags=(4 | (255 << 8) | cv2.FLOODFILL_MASK_ONLY))
+    for it in range(10):
+        area, _, _, rect = cv2.floodFill(rgb, ffmask, (seed[1], seed[0]), 255, loDiff=(4,4,4,4), upDiff=(4,4,4,4),
+                                         flags=(4 | (255 << 8) | cv2.FLOODFILL_MASK_ONLY))
 
         bg_mask = cv2.bitwise_or(ffmask[1:1+height, 1:1+width], bg_mask)
         seed_points = np.column_stack(np.where(bg_mask != 0))
@@ -209,11 +172,7 @@ def create_default_mask(img_file, mask_dst_file, debug_images=False):
         np.random.shuffle(seed_points)
         seed = seed_points[0]
 
-        iter += 1
-        if iter > 10:
-            break
-
-    bg_mask = shrink_mask(bg_mask, 3, 2)
+    bg_mask = shrink_mask(bg_mask, 3, 1)
 
     bg_image = rgb.copy()
     bg_image[bg_mask != 0] = 0
