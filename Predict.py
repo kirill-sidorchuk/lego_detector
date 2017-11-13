@@ -245,6 +245,8 @@ def test(args):
         sort_images(test_dir, args.tta, model, int_to_labels_map, args.tta_mode)
     elif args.mode.lower() == "measure":
         measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
+    else:
+        print("Error: unknown mode: '" + args.mode + "'")
 
 
 if __name__ == "__main__":
