@@ -15,9 +15,11 @@ IMG_RESOLUTION = 1024
 
 def downsample_image(img_file, out_name):
     img = cv2.imread(img_file)
+    if img is None:
+        return img_file, False
     img_small = resize_to_resolution(img, IMG_RESOLUTION)
     cv2.imwrite(out_name, img_small)
-    return img_file
+    return img_file, True
 
 
 def create_segmentation(img_file, seg_file):
@@ -194,8 +196,11 @@ def downsample_images(pool, data_dir, image_files):
             futures.append(pool.apply_async(downsample_image, (img_file, downsampled_file)))
 
     for future in futures:
-        name = future.get()
-        print("downsampled: %s" % name)
+        name, success = future.get()
+        if success:
+            print("downsampled: %s" % name)
+        else:
+            print("fail: %s" % name)
 
 
 def generate_default_masks(pool, data_dir, image_files):
