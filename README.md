@@ -51,3 +51,28 @@ There are two modes: 'measure' and 'sort'
 --tta 0 means no test time data augmentation, 1 - do vertical flip, 2 - do vertical and horizontal flips.\
 --rtta <1 means no robot test time data augmentation, 2 and more means take that many images from sorted directory and average results. 
 --tta_mode 'mean' or 'majority' aggregation method for TTA. Default is 'mean'.
+
+
+## Results
+
+These results were obtained using command line params as follows:\
+--tta 3 --rtta 3 --tta_mode mean\
+Top 1 and top 5 accuracies were measured on a test set of 386 files
+
+#### ResNet50 (24M params)
+Best snapshot: model C, weights-860-0.917.hdf5\
+top1: 91.4%\
+top5: 95.7\
+predict time per image: 900ms 
+
+#### MobileNet (5M params)
+Best snapshot: model E, weights-745-0.875.hdf5\
+top1: 80.7%\
+top5: 94.6%\
+predict time per image: 347 ms
+
+#### InceptionV3 (M params)
+Best snapshot: model F, .hdf5\
+top1: \
+top5: \
+predict time per image: ms\
