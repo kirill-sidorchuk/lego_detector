@@ -6,6 +6,7 @@ import numpy as np
 import os
 
 import cv2
+import time
 from keras.utils import to_categorical
 
 from FilesAndDirs import clear_directory
@@ -130,7 +131,6 @@ def sort_images(test_dir, tta, model, int_to_labels_map, tta_mode):
         if not os.path.isdir(path):
             image_files.append(path)
 
-
     for i in range(len(image_files)):
         src_image = image_files[i]
         probs = predict_with_tta(tta, False, image_files[i:i+1], model, tta_mode)[0]
@@ -150,6 +150,8 @@ def sort_images(test_dir, tta, model, int_to_labels_map, tta_mode):
         dst_image_path = os.path.join(label_dir, src_image_name)
         copyfile(src_image, dst_image_path)
 
+    return len(image_files)
+
 
 def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_map, tta_mode):
 
@@ -168,6 +170,7 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
     top_1_acc = 0
     top_5_acc = 0
     N = 0
+    image_count = 0
 
     for label_dir in test_dirs:
 
@@ -181,6 +184,8 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
             path = os.path.join(label_path, f)
             if os.path.isfile(path):
                 image_files.append(path)
+
+        image_count += len(image_files)
 
         if robot_tta > 1:
             n_batches = len(image_files) // robot_tta
@@ -204,6 +209,7 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
 
     print("top 1 accuracy = %1.2f%%" % (top_1_acc*100.0/N))
     print("top 5 accuracy = %1.2f%%" % (top_5_acc*100.0/N))
+    return image_count
 
 
 def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, top_5_acc, top_n):
@@ -241,12 +247,16 @@ def test(args):
     print("loading weights...")
     model.load_weights(os.path.join(snapshot_path, args.snapshot), by_name=True)
 
+    t = time.time()
     if args.mode.lower() == "sort":
-        sort_images(test_dir, args.tta, model, int_to_labels_map, args.tta_mode)
+        n = sort_images(test_dir, args.tta, model, int_to_labels_map, args.tta_mode)
     elif args.mode.lower() == "measure":
-        measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
+        n = measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
     else:
         print("Error: unknown mode: '" + args.mode + "'")
+        return
+    seconds_per_image = (time.time() - t)/n
+    print("Processing took %1.1fms per image" % (seconds_per_image*1000.))
 
 
 if __name__ == "__main__":
