@@ -113,7 +113,7 @@ def augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip):
         tta_batch.append(rotate(data))
 
 
-def sort_images(test_dir, tta, model):
+def sort_images(test_dir, tta, model, int_to_labels_map, tta_mode):
     """ Sort images with unknown labels to directories by predicted label"""
 
     # preparing sorted dir
@@ -130,11 +130,10 @@ def sort_images(test_dir, tta, model):
         if not os.path.isdir(path):
             image_files.append(path)
 
-    all_probs = predict_with_tta(tta, False, image_files, model)
 
     for i in range(len(image_files)):
-        probs = all_probs[i]
         src_image = image_files[i]
+        probs = predict_with_tta(tta, False, image_files[i:i+1], model, tta_mode)[0]
 
         src_image_name = os.path.split(src_image)[1]
         predicted_label_index = np.argmax(probs)
@@ -243,7 +242,7 @@ def test(args):
     model.load_weights(os.path.join(snapshot_path, args.snapshot), by_name=True)
 
     if args.mode.lower() == "sort":
-        sort_images(test_dir, args.tta, model)
+        sort_images(test_dir, args.tta, model, int_to_labels_map, args.tta_mode)
     elif args.mode.lower() == "measure":
         measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
 
