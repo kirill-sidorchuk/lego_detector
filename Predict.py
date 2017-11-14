@@ -44,7 +44,10 @@ def parse_filename_label(name):
 
 
 def load_image_data(filename):
-    img = cv2.imread(filename)
+    if isinstance(filename, str):
+        img = cv2.imread(filename)
+    else:
+        img = filename
     if img.shape[0] != IMAGE_HEIGHT or img.shape[1] != IMAGE_WIDTH:
         img = cv2.resize(img, (IMAGE_WIDTH, IMAGE_HEIGHT), interpolation=cv2.INTER_AREA)
     return img.astype(np.float32) / 255.0
