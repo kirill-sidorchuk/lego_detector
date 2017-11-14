@@ -203,7 +203,7 @@ def downsample_images(pool, data_dir, image_files):
             print("fail: %s" % name)
 
 
-def generate_default_masks(pool, data_dir, image_files):
+def generate_default_masks(pool, data_dir, image_files, write_debug_images=False):
 
     masks_dir = get_masks_dir(data_dir)
     create_dir(masks_dir)
@@ -213,7 +213,7 @@ def generate_default_masks(pool, data_dir, image_files):
     for img_file in image_files:
         mask_file = get_mask_file_name(img_file)
         if not os.path.exists(mask_file):
-            futures.append(pool.apply_async(create_default_mask, (img_file, mask_file)))
+            futures.append(pool.apply_async(create_default_mask, (img_file, mask_file, write_debug_images)))
 
     for future in futures:
         name = future.get()
