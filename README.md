@@ -63,7 +63,7 @@ Top 1 and top 5 accuracies were measured on a test set of 386 files
 Best snapshot: model C, weights-860-0.917.hdf5\
 top1: 91.4%\
 top5: 95.7\
-predict time per image: 900ms 
+predict time per image: 900 ms 
 
 #### MobileNet (5M params)
 Best snapshot: model E, weights-745-0.875.hdf5\
@@ -71,8 +71,8 @@ top1: 80.7%\
 top5: 94.6%\
 predict time per image: 347 ms
 
-#### InceptionV3 (M params)
-Best snapshot: model F, .hdf5\
-top1: \
-top5: \
-predict time per image: ms\
+#### InceptionV3 (24M params)
+Best snapshot: model F, weights-557-0.910.hdf5\
+top1: 76.3%\
+top5: 94.6%\
+predict time per image: 514 ms
