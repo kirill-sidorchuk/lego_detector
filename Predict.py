@@ -231,6 +231,18 @@ def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, to
     return N, top_1_acc, top_5_acc
 
 
+def load_model(data_root, name, snapshot):
+    snapshot_path = os.path.join(data_root, SNAPSHOTS_PATH, name)
+    labels_map = load_labels_to_int_mapping(os.path.join(snapshot_path, "labels.csv"))
+    int_to_labels_map = create_int_to_labels_map(labels_map)
+    model_obj = create_model_class(name)
+    num_classes = len(labels_map)
+    model = model_obj.create_model(IMAGE_WIDTH, IMAGE_HEIGHT, num_classes)
+    model.load_weights(os.path.join(snapshot_path, snapshot), by_name=True)
+
+    return model, labels_map, int_to_labels_map
+
+
 def test(args):
     test_dir = os.path.join(args.data_root, args.image_dir)
 
