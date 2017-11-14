@@ -8,6 +8,7 @@ import os
 import cv2
 import time
 from keras.utils import to_categorical
+from sklearn.metrics import confusion_matrix
 
 from FilesAndDirs import clear_directory
 from Finetune import IMAGE_HEIGHT, IMAGE_WIDTH
@@ -175,6 +176,10 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
     N = 0
     image_count = 0
 
+    # arrays of prediction results for confusion maxtrix
+    y_pred = []
+    y_true = []
+
     for label_dir in test_dirs:
 
         print("\n%s/" % label_dir)
@@ -201,21 +206,22 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
                     print("\t%s" % os.path.split(im)[1])
 
                 N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
-                                                                 top_5_acc, top_n)
+                                                                 top_5_acc, top_n, y_pred, y_true)
         else:
             for img_file in image_files:
                 print("\t%s" % os.path.split(img_file)[1])
                 probs = predict_with_tta(tta, False, [img_file], model, tta_mode)[0]
 
                 N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
-                                                                 top_5_acc, top_n)
+                                                                 top_5_acc, top_n, y_pred, y_true)
 
     print("top 1 accuracy = %1.2f%%" % (top_1_acc*100.0/N))
     print("top 5 accuracy = %1.2f%%" % (top_5_acc*100.0/N))
-    return image_count
+    conf_matrix = confusion_matrix(y_true, y_pred)
+    return image_count, conf_matrix
 
 
-def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, top_5_acc, top_n):
+def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, top_5_acc, top_n, y_pred, y_true):
     sorted_indexes = np.argsort(probs)
     true_label = label_dir
     top_5_hit = False
@@ -225,6 +231,8 @@ def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, to
         label_name = int_to_labels_map[label_index]
         if t == 0 and label_name == true_label:
             top_1_acc += 1
+            y_pred.append(label_name)
+            y_true.append(true_label)
         if t < 5 and label_name == true_label:
             top_5_hit = True
         print("%1.2f%% %s" % (label_prob * 100.0, label_name))
@@ -266,7 +274,7 @@ def test(args):
     if args.mode.lower() == "sort":
         n = sort_images(test_dir, args.tta, model, int_to_labels_map, args.tta_mode)
     elif args.mode.lower() == "measure":
-        n = measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
+        n, cnf_matrix = measure_accuracy(test_dir, args.tta, args.rtta, model, labels_map, int_to_labels_map, args.tta_mode)
     else:
         print("Error: unknown mode: '" + args.mode + "'")
         return
