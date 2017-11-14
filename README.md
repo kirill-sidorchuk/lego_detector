@@ -1,11 +1,15 @@
 # Lego parts classifier
 
+
 ## Workflow
 * Collect data: make photos of multiple parts in each image
 * Prepare dataset: segment out individual parts and sort the results
 * Finalize dataset: create train/validation split
 * Train a model: finetune existing model trained on ImageNet
 * Test model
+
+## Data Repository
+[Google Drive Folder](https://drive.google.com/drive/folders/1qJFMb3k_JA_EefiI5HkEDkGxsIrhqmCC?usp=sharing)
 
 ## Python
 We are using Python 3 to be able to run Tensorflow on Windows
