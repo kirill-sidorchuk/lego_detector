@@ -34,17 +34,20 @@ For each raw image in 'raw' directory
 * run GrabCut to segment out background (if segmentation result does not exist already) 
 * extract individual parts from segmentation results (always overwrites results)
 
+\
 <b>python3 FinalizeDataset.py <i>data_root_dir</i></b>\
 Creates train/validation split using 'sorted' directory.
 Results - train.txt and val.txt - are created in data root dir.
 
+\
 <b>python3 Finetune.py --model <i>A</i> --snapshot <i>weights-784-0.969.hdf5</i></b>\
 Runs training.\
 --model specifies model name to use.\
 --snapshot <i>file</i> [optional] specifies a snapshot file to restart training from.\
 --debug_epochs <i>N</i> [optional] specifies number of training epochs to save images fed to network. These images will be written in data_root_dir/debug directory.
  
-<b>python3 Predict.py new_test\sorted measure --tta 2 --rtta 0 --model A --snapshot weights-784-0.969.hdf5</b>\
+ \
+<b>python3 Predict.py new_test\sorted measure --tta 2 --rtta 1 --model A --snapshot weights-784-0.969.hdf5</b>\
 Runs prediction on test set (from 'new_test\sorted' subdirectory).\
 There are two modes: 'measure' and 'sort'
 * measure will calculate top1 and top5 accuracies given images with known labels, stored to directories (one directory - one class). Classification results and final accuracies are written to console.
@@ -55,6 +58,17 @@ There are two modes: 'measure' and 'sort'
 --tta 0 means no test time data augmentation, 1 - do vertical flip, 2 - do vertical and horizontal flips.\
 --rtta <1 means no robot test time data augmentation, 2 and more means take that many images from sorted directory and average results. 
 --tta_mode 'mean' or 'majority' aggregation method for TTA. Default is 'mean'.
+
+\
+<b>python3 <i>data_root_dir</i> <i>camera_index</i> --tta 3 --rtta 1 --model E --snapshot weights-745-0.875.hdf5</b>\
+Runs predictions from web camera.\
+data_root_dir - data root dir. Needed to find models snapshots (which are in subdirectory 'snapshots')\
+camera_index - index of web camera in the system. Default is 0\
+--tta - test time augmentation level (see Predict.py arguments description)\
+--rtta - robot test time augmentation level (see Predict.py arguments description)\
+--model - model name to use\
+--snapshot - snapshot file to load. Snapshots should be stored in <i>data_root\snapshots\model_name\\</i>
+
 
 
 ## Results
