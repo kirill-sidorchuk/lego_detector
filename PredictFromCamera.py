@@ -54,7 +54,7 @@ def video_capture(args):
                 label_prob = probs[label_index]
                 label_name = int_to_labels_map[label_index]
                 s = "%1.2f%% %s" % (label_prob * 100.0, label_name)
-                cv2.putText(frame_to_show, s, (0, (t+1)*32), font, 1, (0,0,255), 2, cv2.LINE_AA)
+                cv2.putText(frame_to_show, s, (0, (t+1)*32), font, 1, (0,0,180), 2, cv2.LINE_AA)
 
             # Display the resulting frame
             cv2.imshow('Frame', frame_to_show)
