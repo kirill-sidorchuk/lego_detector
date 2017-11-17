@@ -55,7 +55,7 @@ def finetune(args):
     sgd = optimizers.Adam(lr=1e-5, decay=1e-4, beta_1=0.9)
 
     model.compile(loss={'classes': 'categorical_crossentropy', 'dimensions': 'mean_squared_error'},
-                  loss_weights={'classes': 1., 'dimensions': 1.},
+                  loss_weights={'classes': 1., 'dimensions': 0.5},
                   optimizer=sgd, metrics=['acc'])
 
     filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{classes_acc:.3f}-{dimensions_acc:.3f}.hdf5")

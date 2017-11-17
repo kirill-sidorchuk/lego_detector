@@ -47,14 +47,19 @@ def video_capture(args):
 
             frame_to_show = cv2.resize(past_frames[-1], (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_AREA)
 
-            probs = predict_with_tta(args.tta, True, past_frames, model)[0]
+            probs_and_dims = predict_with_tta(args.tta, True, past_frames, model)[0]
+            probs = probs_and_dims[0]
+            dims = probs_and_dims[1]
             sorted_indexes = np.argsort(probs)
             for t in range(5):
                 label_index = sorted_indexes[-t - 1]
                 label_prob = probs[label_index]
                 label_name = int_to_labels_map[label_index]
+                dim = dims * 8.0
+                sd = "[%1.1f x %1.1f]" % (dim[0], dim[1])
                 s = "%1.2f%% %s" % (label_prob * 100.0, label_name)
-                cv2.putText(frame_to_show, s, (0, (t+1)*32), font, 1, (0,0,180), 2, cv2.LINE_AA)
+                cv2.putText(frame_to_show, sd, (0, 28), font, 0.7, (0,180,100), 2, cv2.LINE_AA)
+                cv2.putText(frame_to_show, s, (0, (t+2)*28), font, 0.7, (0,0,180), 2, cv2.LINE_AA)
 
             # Display the resulting frame
             cv2.imshow('Frame', frame_to_show)

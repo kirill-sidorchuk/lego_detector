@@ -103,10 +103,14 @@ def predict_with_tta(tta, robot_tta, images, model, tta_mode='mean'):
 
 def aggregate_ensemble_probs(probs_all, results, tta_mode):
     if tta_mode == 'mean':
-        results.append(np.mean(probs_all, axis=0))
+        mean_classes = np.mean(probs_all[0], axis=0)
+        mean_dimensions = np.mean(probs_all[1], axis=0)
+        results.append([mean_classes, mean_dimensions])
     else:
-        counts = np.sum(to_categorical(np.argmax(probs_all, axis=1), num_classes=len(probs_all[0])), axis=0)
-        results.append(counts / np.sum(counts))
+        counts = np.sum(to_categorical(np.argmax(probs_all[0], axis=1), num_classes=len(probs_all[0][0])), axis=0)
+        maj_classes = counts / np.sum(counts)
+        mean_dimensions = np.mean(probs_all[1], axis=0)
+        results.append([maj_classes, mean_dimensions])
 
 
 def augment(data, tta_batch, tta_hflip, tta_rotate, tta_vflip):
@@ -200,19 +204,19 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
             for i in range(n_batches):
                 offset = i * robot_tta
                 robot_images = image_files[offset: offset + robot_tta]
-                probs = predict_with_tta(tta, True, robot_images, model, tta_mode)[0]
+                probs_and_dims = predict_with_tta(tta, True, robot_images, model, tta_mode)[0]
 
                 for im in robot_images:
                     print("\t%s" % os.path.split(im)[1])
 
-                N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
+                N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs_and_dims, top_1_acc,
                                                                  top_5_acc, top_n, y_pred, y_true)
         else:
             for img_file in image_files:
                 print("\t%s" % os.path.split(img_file)[1])
-                probs = predict_with_tta(tta, False, [img_file], model, tta_mode)[0]
+                probs_and_dims = predict_with_tta(tta, False, [img_file], model, tta_mode)[0]
 
-                N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc,
+                N, top_1_acc, top_5_acc = update_accuracy_counts(N, int_to_labels_map, label_dir, probs_and_dims, top_1_acc,
                                                                  top_5_acc, top_n, y_pred, y_true)
 
     print("top 1 accuracy = %1.2f%%" % (top_1_acc*100.0/N))
@@ -221,7 +225,9 @@ def measure_accuracy(test_dir, tta, robot_tta, model, labels_map, int_to_labels_
     return image_count, conf_matrix
 
 
-def update_accuracy_counts(N, int_to_labels_map, label_dir, probs, top_1_acc, top_5_acc, top_n, y_pred, y_true):
+def update_accuracy_counts(N, int_to_labels_map, label_dir, probs_and_dims, top_1_acc, top_5_acc, top_n, y_pred, y_true):
+    probs = probs_and_dims[0]
+    dims = probs_and_dims[1]
     sorted_indexes = np.argsort(probs)
     true_label = label_dir
     top_5_hit = False
