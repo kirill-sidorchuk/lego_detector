@@ -54,9 +54,12 @@ def finetune(args):
     nb_epoch = 800
     sgd = optimizers.Adam(lr=1e-5, decay=1e-4, beta_1=0.9)
 
-    model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['acc'])
-    filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{val_acc:.3f}.hdf5")
-    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+    model.compile(loss={'classes': 'categorical_crossentropy', 'dimensions': 'mean_squared_error'},
+                  loss_weights={'classes': 1., 'dimensions': 1.},
+                  optimizer=sgd, metrics=['acc'])
+
+    filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{classes_acc:.3f}-{dimensions_acc:.3f}.hdf5")
+    checkpoint = ModelCheckpoint(filepath, monitor='classes_acc', verbose=1, save_best_only=True, mode='max')
 
     logpath = "model_" + model_name + "_log.txt"
     csv_logger = CSVLogger(logpath)

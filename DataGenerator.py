@@ -10,6 +10,28 @@ from FinalizeDataset import SORTED_DIR
 BG_RESOLUTION = 1024
 
 
+def parse_dimensions(label):
+    i = str(label).rfind('_')
+    if i == -1:
+        return [0, 0]
+
+    try:
+        low_dim = int(label[i+1:])
+    except Exception as _:
+        return [0, 0]
+
+    j = label.rfind('_', 0, i)
+    if j == -1:
+        return [0, 0]
+
+    try:
+        high_dim = int(label[j+1:i])
+    except Exception as _:
+        return [0, 0]
+
+    return [high_dim, low_dim]
+
+
 class DataGenerator(object):
     def __init__(self, data_root, dataset_type, max_rotation, max_img_zoom, max_bg_zoom, max_saturation_delta, max_lightness_delta,
                  additive_noise, batch_size, image_size, debug_epochs,
@@ -31,7 +53,7 @@ class DataGenerator(object):
         if self.debug_epochs:
             self.prepare_debug_dir()
 
-        self.image_files, self.labels_to_ints = self.load_labels(dataset_type + ".txt")
+        self.image_files, self.labels_to_ints, self.labels_to_dims = self.load_labels(dataset_type + ".txt")
         self.images = self.load_images()
         self.num_classes = len(self.images)
         self.image_tuples = self.initialize_image_order()
@@ -68,6 +90,7 @@ class DataGenerator(object):
             lines = f.readlines()
 
         labels_to_ints = {}
+        labels_to_dims = {}
         label_index = 0
         images = {}
         for line in lines:
@@ -81,9 +104,10 @@ class DataGenerator(object):
             else:
                 images[label] = [img_file]
                 labels_to_ints[label] = label_index
+                labels_to_dims[label] = parse_dimensions(label)
                 label_index += 1
 
-        return images, labels_to_ints
+        return images, labels_to_ints, labels_to_dims
 
     def load_images(self):
         images = {}
@@ -223,7 +247,8 @@ class DataGenerator(object):
         img = (cv2.cvtColor(cv2.merge(hsv), cv2.COLOR_HSV2BGR) * 255).astype(np.uint8)
         return img
 
-    def random_channel_dropout(self, img):
+    @staticmethod
+    def random_channel_dropout(img):
         if np.random.rand() < 0.5:
             bgr = cv2.split(img)
             channel = np.random.randint(3)
@@ -245,7 +270,7 @@ class DataGenerator(object):
         return int(len(self.image_tuples) / self.batch_size)
 
     def generate(self):
-        'Generates batches of samples'
+        """Generates batches of samples"""
 
         debug_epoch = self.debug_epochs
         epoch = 0
@@ -269,6 +294,7 @@ class DataGenerator(object):
 
                 batch = []
                 batch_labels = []
+                batch_dims = []
 
                 for b in range(self.batch_size):
                     _img_index = img_indexes[img_index]
@@ -286,6 +312,7 @@ class DataGenerator(object):
                     # formatting data for the network
                     batch.append(generated_img)
                     batch_labels.append(self.labels_to_ints[label])
+                    batch_dims.append(self.labels_to_dims[label])
 
                     bg_index = (bg_index + 1) % len(self.bg_images)
                     img_index += 1
@@ -293,4 +320,4 @@ class DataGenerator(object):
                 # converting to numpy arrays
                 batch = np.array(batch, dtype=np.float32) / 255.0
                 batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
-                yield batch, batch_labels
+                yield batch, {'classes': batch_labels, 'dimensions': (np.array(batch_dims, dtype=np.float32) / 8.0)}
