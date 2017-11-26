@@ -54,7 +54,7 @@ def finetune(args):
     nb_epoch = 800
     sgd = optimizers.Adam(lr=1e-5, decay=1e-4, beta_1=0.9)
 
-    model.compile(loss={'classes': 'categorical_crossentropy', 'dimensions': 'mean_squared_error'},
+    model.compile(loss={'classes': 'categorical_crossentropy', 'dimensions': 'binary_crossentropy'},
                   loss_weights={'classes': 1., 'dimensions': 0.5},
                   optimizer=sgd, metrics=['acc'])
 

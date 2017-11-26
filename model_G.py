@@ -2,6 +2,8 @@ from keras import applications
 from keras.engine import Model
 from keras.layers import Flatten, Dense, BatchNormalization, Activation, Dropout
 
+from DataGenerator import BITS_PER_DIM
+
 
 class Model_G(object):
 
@@ -20,6 +22,6 @@ class Model_G(object):
         x = BatchNormalization()(x)
         predictions = Activation('softmax', name="classes")(x)
 
-        dimensions = Dense(2, name="dimensions")(dropout)
+        dimensions = Dense(BITS_PER_DIM * 2, name="dimensions")(dropout)
 
         return Model(model.input, outputs=[predictions, dimensions])

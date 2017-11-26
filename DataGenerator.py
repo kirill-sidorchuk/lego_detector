@@ -8,6 +8,7 @@ from FilesAndDirs import clear_directory
 from FinalizeDataset import SORTED_DIR
 
 BG_RESOLUTION = 1024
+BITS_PER_DIM = 4
 
 
 def parse_dimensions(label):
@@ -30,6 +31,23 @@ def parse_dimensions(label):
         return [0, 0]
 
     return [high_dim, low_dim]
+
+
+def encode_dimension(d):
+    digits = []
+    for b in range(BITS_PER_DIM):
+        digit = 1 if (d & 1) != 0 else 0
+        d = d // 2
+        digits.insert(0, digit)
+
+    return digits
+
+
+def encode_dimensions(dd):
+    high_digits = encode_dimension(dd[0])
+    low_digits = encode_dimension(dd[1])
+    full_list = high_digits + low_digits
+    return np.array(full_list, dtype=np.float32)
 
 
 class DataGenerator(object):
@@ -312,7 +330,7 @@ class DataGenerator(object):
                     # formatting data for the network
                     batch.append(generated_img)
                     batch_labels.append(self.labels_to_ints[label])
-                    batch_dims.append(self.labels_to_dims[label])
+                    batch_dims.append(encode_dimensions(self.labels_to_dims[label]))
 
                     bg_index = (bg_index + 1) % len(self.bg_images)
                     img_index += 1
@@ -320,4 +338,4 @@ class DataGenerator(object):
                 # converting to numpy arrays
                 batch = np.array(batch, dtype=np.float32) / 255.0
                 batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
-                yield batch, {'classes': batch_labels, 'dimensions': (np.array(batch_dims, dtype=np.float32) / 8.0)}
+                yield batch, {'classes': batch_labels, 'dimensions': np.array(batch_dims, dtype=np.float32) }
