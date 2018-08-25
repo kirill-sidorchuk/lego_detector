@@ -9,14 +9,14 @@ class Model_A(object):
         super().__init__()
 
     def create_model(self, image_width, image_height, num_classes):
-        model = applications.ResNet50(weights="imagenet", include_top=False, input_shape=(image_width, image_height, 3))
+        model = applications.ResNet50(weights="imagenet", include_top=False, pooling="avg", input_shape=(image_width, image_height, 3))
 
         # freezing all layers
-#        for layer in model.layers:
-#            layer.trainable = False
+        # for layer in model.layers:
+        #     layer.trainable = False
 
         x = model.output
-        x = Flatten()(x)
+        # x = Flatten()(x) # not needed anymore?
 
         x = Dropout(0.8)(x)
 
