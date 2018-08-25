@@ -75,7 +75,7 @@ def video_capture(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Finetune model')
+    parser = argparse.ArgumentParser(description='Run prediction from web camera')
     parser.add_argument("data_root", type=str, help="data root dir")
     parser.add_argument("--camera", type=int, default=0, help="camera device index")
     parser.add_argument("--tta", type=int, default=0, help="0 - no TTA, 1 - hflip, 2 - vflip+hflip")
