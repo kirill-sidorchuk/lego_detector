@@ -2,10 +2,11 @@ import argparse
 import numpy as np
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 from keras import optimizers
 from keras.callbacks import ModelCheckpoint, TensorBoard, CSVLogger
+from keras.losses import categorical_crossentropy
 
 from DataGenerator import DataGenerator
 from ModelUtils import create_model_class, parse_epoch
@@ -13,16 +14,17 @@ from ModelUtils import create_model_class, parse_epoch
 SNAPSHOTS_PATH = "snapshots"
 IMAGE_WIDTH = 224
 IMAGE_HEIGHT = 224
-BATCH_SIZE = 32
+BATCH_SIZE = 16
+SEGMENTATION = True
 
 np.random.seed(1337)  # for reproducibility
 
 
 def finetune(args):
     train_data_generator = DataGenerator(args.data_root, "train", 90, (0.7, 1.2), (1, 3), 0.3, 0.3, 5, BATCH_SIZE,
-                                         (IMAGE_HEIGHT, IMAGE_WIDTH), 0, True, True, True)
+                                         (IMAGE_HEIGHT, IMAGE_WIDTH), args.debug_epochs, True, True, True, SEGMENTATION)
     val_data_generator = DataGenerator(args.data_root, "val", 90, (0.7, 1.2), (1, 3), 0.3, 0.3, 5, BATCH_SIZE,
-                                         (IMAGE_HEIGHT, IMAGE_WIDTH), 4, True, True, True)
+                                         (IMAGE_HEIGHT, IMAGE_WIDTH), 0, True, True, True, SEGMENTATION)
 
     num_classes = train_data_generator.get_num_classes()
 
@@ -54,9 +56,27 @@ def finetune(args):
     nb_epoch = 800
     sgd = optimizers.Adam(lr=1e-5, decay=1e-4, beta_1=0.9)
 
-    model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['acc'])
-    filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{val_acc:.3f}.hdf5")
-    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+    # selecting loss functions and weights
+    losses = {}
+    loss_weights = {}
+    metrics = {}
+    if SEGMENTATION:
+        # segmentation and classification mode
+        losses['segm_out'] = categorical_crossentropy
+        loss_weights['segm_out'] = 1.0
+        metrics['segm_out'] = 'accuracy'
+        losses['class_out'] = categorical_crossentropy
+        loss_weights['class_out'] = 1.0
+        metrics['class_out'] = 'accuracy'
+    else:
+        # plain classification mode
+        losses = 'categorical_crossentropy'
+        loss_weights = None
+        metrics = ['accuracy']
+
+    model.compile(loss=losses, optimizer=sgd, metrics=metrics, loss_weights=loss_weights)
+    filepath = os.path.join(model_snapshot_path, "weights-{epoch:03d}-{class_out_acc:.3f}.hdf5")
+    checkpoint = ModelCheckpoint(filepath, monitor='class_out_acc', verbose=1, save_best_only=True, mode='max')
 
     logpath = "model_" + model_name + "_log.txt"
     csv_logger = CSVLogger(logpath)

@@ -13,7 +13,7 @@ BG_RESOLUTION = 1024
 class DataGenerator(object):
     def __init__(self, data_root, dataset_type, max_rotation, max_img_zoom, max_bg_zoom, max_saturation_delta, max_lightness_delta,
                  additive_noise, batch_size, image_size, debug_epochs,
-                 aug_flip, aug_channel_dropout, aug_hue):
+                 aug_flip, aug_channel_dropout, aug_hue, segmentation_out=False):
         self.data_root = data_root
         self.max_rotation = max_rotation
         self.max_img_zoom = max_img_zoom
@@ -27,6 +27,7 @@ class DataGenerator(object):
         self.aug_flip = aug_flip
         self.aug_channel_dropout = aug_channel_dropout
         self.aug_hue = aug_hue
+        self.segmentation_out = segmentation_out
 
         if self.debug_epochs:
             self.prepare_debug_dir()
@@ -135,7 +136,7 @@ class DataGenerator(object):
 
         dst[mask_big != 0] = 0
         dst += fg_big
-        return dst
+        return dst, mask_big
 
     def get_num_classes(self):
         return self.num_classes
@@ -235,11 +236,11 @@ class DataGenerator(object):
     def generate_image(self, img, mask, bg, dst_size):
         img, mask = self.transform_image(img, dst_size, mask)
         bg, _ = self.transform_image(bg, dst_size)
-        final_img = self.render(img, mask, bg)
+        final_img, final_mask = self.render(img, mask, bg)
         final_img = np.clip(final_img.astype(np.int32) + \
                     (np.random.randn(final_img.shape[0], final_img.shape[1], final_img.shape[2]) * self.additive_noise).astype(np.int32),
                     0, 255).astype(np.uint8)
-        return final_img
+        return final_img, final_mask
 
     def get_steps_per_epoch(self):
         return int(len(self.image_tuples) / self.batch_size)
@@ -268,7 +269,8 @@ class DataGenerator(object):
             for i in range(n):
 
                 batch = []
-                batch_labels = []
+                batch_class_labels = []
+                batch_segm_labels = []
 
                 for b in range(self.batch_size):
                     _img_index = img_indexes[img_index]
@@ -277,20 +279,32 @@ class DataGenerator(object):
                     img, mask, label = self.image_tuples[_img_index]
                     bg_img = self.bg_images[_bg_index]
 
-                    generated_img = self.generate_image(img, mask, bg_img, self.image_size)
+                    generated_img, final_mask = self.generate_image(img, mask, bg_img, self.image_size)
                     if debug_epoch >= 0:
                         # saving generated image
                         filename = os.path.join(self.debug_dir, "%02d_%03d.jpg" % (epoch, b))
+                        filename_mask = os.path.join(self.debug_dir, "%02d_mask_%03d.jpg" % (epoch, b))
                         cv2.imwrite(filename, generated_img)
+                        final_mask_n = np.zeros(final_mask.shape, dtype=np.float32)
+                        cv2.normalize(final_mask, final_mask_n, 255, 0, norm_type=cv2.NORM_MINMAX)
+                        cv2.imwrite(filename_mask, final_mask_n)
 
                     # formatting data for the network
                     batch.append(generated_img)
-                    batch_labels.append(self.labels_to_ints[label])
+                    if self.segmentation_out:
+                        batch_segm_labels.append(final_mask)
+
+                    batch_class_labels.append(self.labels_to_ints[label])
 
                     bg_index = (bg_index + 1) % len(self.bg_images)
                     img_index += 1
 
                 # converting to numpy arrays
                 batch = np.array(batch, dtype=np.float32) / 255.0
-                batch_labels = to_categorical(np.array(batch_labels, dtype=np.float32), num_classes=self.num_classes)
-                yield batch, batch_labels
+                batch_class_labels = to_categorical(np.array(batch_class_labels, dtype=np.float32), num_classes=self.num_classes)
+
+                if self.segmentation_out:
+                    batch_segm_labels = to_categorical(np.array(batch_segm_labels, dtype=np.float32), num_classes=2)
+                    yield batch, {'class_out': batch_class_labels, 'segm_out': batch_segm_labels}
+                else:
+                    yield batch, batch_class_labels
